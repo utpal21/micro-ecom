@@ -1,13 +1,13 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-04-19T10:14:43.638Z",
+  "generatedAt": "2026-04-19T11:24:33.625Z",
   "services": [
     {
       "name": "auth-service",
       "displayName": "Auth Service",
       "basePath": "/api/v1/auth",
-      "swaggerUrl": null,
-      "status": "planned",
+      "swaggerUrl": "services/auth-service/docs/openapi.yaml",
+      "status": "ready",
       "tags": [
         "auth",
         "jwks",

@@ -8,8 +8,8 @@
       "framework": "Laravel 13",
       "basePath": "/api/v1/auth",
       "port": 8001,
-      "swaggerUrl": null,
-      "status": "planned",
+      "swaggerUrl": "services/auth-service/docs/openapi.yaml",
+      "status": "ready",
       "tags": ["auth", "jwks", "rbac"],
       "endpoints": [
         "POST /auth/register",
@@ -114,4 +114,3 @@
     }
   ]
 }
-

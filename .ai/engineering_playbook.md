@@ -78,7 +78,52 @@ Do not optimize convenience ahead of correctness, traceability, or recovery.
 - Keep framework glue thin and push domain logic into dedicated services or use cases.
 - Every non-trivial public method should have clear validation and failure behavior.
 
-### 5.2 Module Boundaries
+### 5.2 Type Safety Policy
+
+Type safety is mandatory across this repository.
+
+This policy applies to:
+
+- Laravel services
+- NestJS services
+- Next.js applications
+- Node.js services
+- shared packages
+- scripts and background workers
+- any future service added to this repository
+
+Core rules:
+
+- Do not use `any` in TypeScript.
+- Do not use implicit `any`.
+- Do not use `mixed` or unbounded dynamic values as a shortcut unless they are validated immediately at the boundary.
+- Do not disable strict typing rules to get code through compilation.
+- Do not widen types just to silence the compiler.
+- Do not return loosely shaped arrays or objects when a DTO, interface, or schema should exist.
+- Do not pass unvalidated external payloads beyond the transport boundary.
+- Do not use stringly-typed domain state when an enum, literal union, value object, or constant map should exist.
+
+Allowed boundary pattern:
+
+- external input may enter as `unknown`
+- validate or parse it immediately
+- convert it into a typed DTO, schema-backed object, or domain object before further use
+
+Allowed exception process:
+
+- if a runtime or framework boundary truly forces a loose type, contain it in the smallest possible adapter
+- document why the loose boundary exists
+- validate and narrow the value immediately
+- never let the loose type spread through service logic
+- no team member or coding agent may treat this as optional based on personal style
+
+Required mindset:
+
+- application code must model invariants in types wherever practical
+- runtime validation complements static typing; it does not replace it
+- compiler warnings about types are design feedback, not noise
+
+### 5.3 Module Boundaries
 
 - `controller` or `route` layers handle transport only.
 - `service` or `use-case` layers handle business logic.
@@ -86,7 +131,7 @@ Do not optimize convenience ahead of correctness, traceability, or recovery.
 - `mapper` or serializer layers convert between transport, domain, and persistence models.
 - Shared packages must remain framework-light where possible.
 
-### 5.3 Error Handling
+### 5.4 Error Handling
 
 - Fail fast on invalid input.
 - Use typed error categories: validation, auth, forbidden, conflict, dependency failure, unexpected failure.
@@ -94,18 +139,59 @@ Do not optimize convenience ahead of correctness, traceability, or recovery.
 - Log internal context once, at the boundary where the error is handled.
 - Convert internal exceptions into standardized API or event error shapes.
 
-### 5.4 Configuration
+### 5.5 Configuration
 
 - Centralize environment parsing and validation at startup.
 - Reject boot if required config is missing or malformed.
 - Keep defaults safe for local development and explicit for production.
 - Do not read raw environment variables throughout the codebase.
 
-### 5.5 Time and Money
+### 5.6 Time and Money
 
 - Persist timestamps in UTC.
 - Use ISO 8601 in logs and API payloads where timestamps are exposed.
 - Never use floats for money, discounts, totals, or ledger values.
+
+### 5.7 Type-Safety Enforcement By Stack
+
+#### TypeScript Services and Shared Packages
+
+- Enable strict TypeScript mode.
+- Keep `noImplicitAny` and related strict compiler checks enabled.
+- Prefer `unknown` over `any` at unsafe boundaries.
+- Use Zod schemas, DTOs, and literal unions to narrow transport payloads.
+- Shared packages must export concrete types for contracts used across services.
+- Avoid type assertions unless validation or framework guarantees justify them.
+- If a type assertion is required, keep it local and justify it with nearby code or a docblock.
+- Do not use `Record<string, any>`, `Promise<any>`, `Map<string, any>`, or similar loose shortcuts.
+
+#### PHP Services
+
+- Use `declare(strict_types=1);` in PHP files where applicable to the service codebase.
+- Add explicit parameter types, return types, and typed properties everywhere possible.
+- Do not rely on untyped arrays for important domain structures when DTOs or value objects are warranted.
+- Prefer backed enums, value objects, and dedicated classes over magic strings.
+- Validate request payloads before they reach business logic.
+- Use PHPDoc only to refine types that PHP itself cannot express cleanly, not as a substitute for real typing.
+- Do not use `mixed` as a convenience escape hatch in service logic.
+- Do not use generic associative arrays as hidden DTOs for core workflows.
+- Use typed request objects, typed resources, typed service contracts, typed collection contents where possible, and explicit domain value objects for critical business concepts.
+- If framework APIs return broad values, narrow them immediately at the boundary before business logic uses them.
+
+#### Cross-Language Rule
+
+- Every service must use the strongest practical typing model available in its language and framework.
+- Business logic must never be built on top of vague transport shapes.
+- External input, event payloads, database records, and configuration must be converted into explicit typed structures before workflow logic executes.
+- If a language cannot express a type invariant statically, enforce it through validation, value objects, enums, guards, schema parsing, or dedicated wrapper types.
+- Production-grade code in this repository must favor explicit contracts over dynamic convenience.
+
+#### JSON and Event Contracts
+
+- JSON payloads are not trusted until validated.
+- Event payloads must have schema-backed definitions.
+- API request and response bodies must be represented by explicit DTOs or schema types.
+- Config objects must be parsed into typed structures before use.
 
 ---
 

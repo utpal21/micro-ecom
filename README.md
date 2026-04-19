@@ -8,8 +8,8 @@ This repository contains the monorepo foundation for the Enterprise Marketplace 
 
 ## Progress
 
-- Completed phases: `2 / 11`
-- Current phase: `Phase 3 - Auth Service`
+- Completed phases: `3 / 11`
+- Current phase: `Phase 4 - Product Service`
 - Source of truth: `.ai/implementation_plan.md`
 - Engineering standards: `.ai/engineering_playbook.md`
 
@@ -31,6 +31,17 @@ Phase 2 establishes:
 - `packages/utils` with structured logging, tracing, validation, and API error helpers
 - `packages/event-bus` with RabbitMQ topology, publisher, consumer, and idempotency primitives
 - Base Nginx gateway configuration with route mapping, rate limiting, request ID propagation, and `/health`
+
+## Phase 3 Scope
+
+Phase 3 establishes:
+
+- Laravel 13 Auth service scaffold in `services/auth-service`
+- RS256 JWT issuance and JWKS publishing
+- refresh token rotation and blacklist support
+- role and permission seeding with Spatie
+- auth API routes, health endpoints, and OpenAPI definition
+- feature tests for register, login, refresh, JWKS, and service-token flows
 
 ## Quick Start
 
