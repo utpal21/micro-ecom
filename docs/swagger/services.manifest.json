@@ -1,0 +1,117 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-04-19T00:00:00Z",
+  "services": [
+    {
+      "name": "auth-service",
+      "displayName": "Auth Service",
+      "framework": "Laravel 13",
+      "basePath": "/api/v1/auth",
+      "port": 8001,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["auth", "jwks", "rbac"],
+      "endpoints": [
+        "POST /auth/register",
+        "POST /auth/login",
+        "POST /auth/refresh",
+        "POST /auth/logout",
+        "GET /auth/me",
+        "POST /auth/password/reset",
+        "GET /.well-known/jwks.json",
+        "POST /auth/service-token"
+      ]
+    },
+    {
+      "name": "product-service",
+      "displayName": "Product Service",
+      "framework": "NestJS 10",
+      "basePath": "/api/v1/products",
+      "port": 8002,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["products", "categories", "search"],
+      "endpoints": [
+        "GET /products",
+        "GET /products/:id",
+        "POST /products",
+        "PUT /products/:id",
+        "DELETE /products/:id",
+        "GET /products/search?q=",
+        "GET /categories"
+      ]
+    },
+    {
+      "name": "order-service",
+      "displayName": "Order Service",
+      "framework": "Laravel 13",
+      "basePath": "/api/v1/orders",
+      "port": 8003,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["orders", "admin"],
+      "endpoints": [
+        "POST /orders",
+        "GET /orders/:id",
+        "GET /orders",
+        "PATCH /orders/:id/cancel",
+        "GET /admin/orders",
+        "PATCH /admin/orders/:id/status"
+      ]
+    },
+    {
+      "name": "inventory-service",
+      "displayName": "Inventory Service",
+      "framework": "NestJS 10",
+      "basePath": "/api/v1/inventory",
+      "port": 8004,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["inventory", "stock", "admin"],
+      "endpoints": [
+        "GET /inventory/:sku",
+        "POST /inventory/reserve",
+        "POST /inventory/release",
+        "POST /admin/inventory/adjust",
+        "GET /admin/inventory"
+      ]
+    },
+    {
+      "name": "payment-service",
+      "displayName": "Payment Service",
+      "framework": "NestJS 10",
+      "basePath": "/api/v1/payments",
+      "port": 8005,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["payments", "sslcommerz", "ledger"],
+      "endpoints": [
+        "POST /payments/initiate",
+        "POST /payments/ipn",
+        "POST /payments/success",
+        "POST /payments/fail",
+        "POST /payments/cancel",
+        "GET /payments/:id",
+        "POST /payments/:id/refund",
+        "POST /payments/cod/confirm",
+        "GET /payments/reconciliation"
+      ]
+    },
+    {
+      "name": "notification-service",
+      "displayName": "Notification Service",
+      "framework": "Node.js 22",
+      "basePath": "/api/v1/notifications",
+      "port": 8006,
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": ["notifications", "email", "sms"],
+      "endpoints": [
+        "POST /notify/email",
+        "POST /notify/sms",
+        "GET /notifications/:userId"
+      ]
+    }
+  ]
+}
+

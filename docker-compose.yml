@@ -1,0 +1,280 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: emp-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: emp
+      RABBITMQ_DEFAULT_PASS: emp
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - emp-backend
+
+  postgres-auth:
+    image: postgres:17-alpine
+    container_name: emp-postgres-auth
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: emp_auth
+      POSTGRES_USER: emp
+      POSTGRES_PASSWORD: emp
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emp -d emp_auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - emp-backend
+
+  postgres-order:
+    image: postgres:17-alpine
+    container_name: emp-postgres-order
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: emp_order
+      POSTGRES_USER: emp
+      POSTGRES_PASSWORD: emp
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emp -d emp_order"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-order-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - emp-backend
+
+  postgres-inventory:
+    image: postgres:17-alpine
+    container_name: emp-postgres-inventory
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: emp_inventory
+      POSTGRES_USER: emp
+      POSTGRES_PASSWORD: emp
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emp -d emp_inventory"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-inventory-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - emp-backend
+
+  postgres-payment:
+    image: postgres:17-alpine
+    container_name: emp-postgres-payment
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_DB: emp_payment
+      POSTGRES_USER: emp
+      POSTGRES_PASSWORD: emp
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emp -d emp_payment"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-payment-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - emp-backend
+
+  mongodb:
+    image: mongo:7.0
+    container_name: emp-mongodb
+    command: ["mongod", "--replSet", "emp-rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - emp-backend
+
+  mongo-init-replica:
+    image: mongo:7.0
+    container_name: emp-mongo-init-replica
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - mongosh --host mongodb:27017 /scripts/init-replica.js
+    restart: "no"
+    volumes:
+      - ./infrastructure/docker/mongodb/init-replica.js:/scripts/init-replica.js:ro
+    networks:
+      - emp-backend
+
+  redis-master:
+    image: redis:7.2-alpine
+    container_name: emp-redis-master
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-master-data:/data
+      - ./infrastructure/docker/redis/redis-master.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - emp-backend
+
+  redis-replica-1:
+    image: redis:7.2-alpine
+    container_name: emp-redis-replica-1
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--replicaof", "redis-master", "6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-replica-1-data:/data
+      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - emp-backend
+
+  redis-replica-2:
+    image: redis:7.2-alpine
+    container_name: emp-redis-replica-2
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--replicaof", "redis-master", "6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-replica-2-data:/data
+      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - emp-backend
+
+  redis-sentinel-1:
+    image: redis:7.2-alpine
+    container_name: emp-redis-sentinel-1
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
+      ]
+    ports:
+      - "26379:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    networks:
+      - emp-backend
+
+  redis-sentinel-2:
+    image: redis:7.2-alpine
+    container_name: emp-redis-sentinel-2
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
+      ]
+    ports:
+      - "26380:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    networks:
+      - emp-backend
+
+  redis-sentinel-3:
+    image: redis:7.2-alpine
+    container_name: emp-redis-sentinel-3
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
+      ]
+    ports:
+      - "26381:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    networks:
+      - emp-backend
+
+networks:
+  emp-backend:
+    driver: bridge
+
+volumes:
+  rabbitmq-data:
+  postgres-auth-data:
+  postgres-order-data:
+  postgres-inventory-data:
+  postgres-payment-data:
+  mongodb-data:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:

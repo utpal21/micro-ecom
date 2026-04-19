@@ -1,0 +1,77 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-04-19T10:14:43.638Z",
+  "services": [
+    {
+      "name": "auth-service",
+      "displayName": "Auth Service",
+      "basePath": "/api/v1/auth",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "auth",
+        "jwks",
+        "rbac"
+      ]
+    },
+    {
+      "name": "product-service",
+      "displayName": "Product Service",
+      "basePath": "/api/v1/products",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "products",
+        "categories",
+        "search"
+      ]
+    },
+    {
+      "name": "order-service",
+      "displayName": "Order Service",
+      "basePath": "/api/v1/orders",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "orders",
+        "admin"
+      ]
+    },
+    {
+      "name": "inventory-service",
+      "displayName": "Inventory Service",
+      "basePath": "/api/v1/inventory",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "inventory",
+        "stock",
+        "admin"
+      ]
+    },
+    {
+      "name": "payment-service",
+      "displayName": "Payment Service",
+      "basePath": "/api/v1/payments",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "payments",
+        "sslcommerz",
+        "ledger"
+      ]
+    },
+    {
+      "name": "notification-service",
+      "displayName": "Notification Service",
+      "basePath": "/api/v1/notifications",
+      "swaggerUrl": null,
+      "status": "planned",
+      "tags": [
+        "notifications",
+        "email",
+        "sms"
+      ]
+    }
+  ]
+}
