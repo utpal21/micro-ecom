@@ -54,6 +54,9 @@ Do not optimize convenience ahead of correctness, traceability, or recovery.
 
 ## 4. Staff-Level Development Principles
 
+- **Containerization First**: Every service MUST be fully Dockerized. Creating the Docker container (`Dockerfile` and `docker-compose` entry) for a service is the mandatory FIRST step of any coding phase to ensure zero local dependencies.
+- **Strict Design Patterns**: NEVER use direct database queries (e.g., Eloquent models or DB facades) in Controllers. You must strictly use Service and Repository patterns as expected of a Staff-Level Software Engineer. Controllers handle HTTP routing/requests and delegate all logic.
+- **Dynamic Swagger**: Swagger/OpenAPI documentation must be generated *dynamically* from code, using annotations or reflection. Manual maintenance of Swagger YAML/JSON files is not permitted.
 - Design for failure first: retries, timeouts, DLQs, and idempotency are baseline behavior.
 - Prefer boring, explicit code over clever abstractions.
 - Keep service boundaries strict and obvious in code structure.

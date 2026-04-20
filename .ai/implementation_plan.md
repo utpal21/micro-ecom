@@ -5,6 +5,11 @@
 
 This document outlines the step-by-step implementation plan. We will follow this sequence strictly, ensuring no service is built without its required foundations and integrations. **Do not skip ahead.**
 
+**CRITICAL PHASE PRE-REQUISITES:**
+1. **Containerization First:** Before beginning any coding for a phase, you MUST create a Dockerfile and docker-compose service configuration for that specific service. No service (e.g., Auth Service) should run natively on the host machine.
+2. **Strict Design Patterns:** Controllers must NEVER contain direct database queries. You must strictly use Service and Repository patterns.
+3. **Dynamic Swagger:** Swagger/OpenAPI documentation must be generated dynamically from code annotations.
+
 Implementation standards and coding conventions are defined in `.ai/engineering_playbook.md`. All phases must follow that playbook in addition to the SRS.
 
 ---

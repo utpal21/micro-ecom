@@ -1,128 +1,284 @@
+version: '3.9'
+
 services:
+  # ============================================
+  # Auth Service - Laravel 13
+  # ============================================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: emp-auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-8001}:8001"
+    environment:
+      # Database Configuration
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres-auth
+      - DB_PORT=5432
+      - DB_DATABASE=emp_auth
+      - DB_USERNAME=${POSTGRES_USER:-emp}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-emp}
+      
+      # Redis Configuration
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      
+      # Application Configuration
+      - APP_NAME=${APP_NAME:-EMPAuthService}
+      - APP_ENV=${APP_ENV:-local}
+      - APP_DEBUG=${APP_DEBUG:-true}
+      - APP_URL=${APP_URL:-http://localhost:8001}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      
+      # JWT Configuration
+      - JWT_ISSUER=${JWT_ISSUER:-http://localhost:8001}
+      - JWT_PLATFORM_AUDIENCE=${JWT_PLATFORM_AUDIENCE:-emp-platform}
+      - JWT_ACCESS_TOKEN_TTL_MINUTES=${JWT_ACCESS_TOKEN_TTL_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_TTL_DAYS=${JWT_REFRESH_TOKEN_TTL_DAYS:-7}
+      - SERVICE_TOKEN_API_KEY=${SERVICE_TOKEN_API_KEY:-change-me-in-production}
+      
+      # Security
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+    volumes:
+      # Mount application code for development
+      - ./services/auth-service:/var/www/auth-service
+      # Persist storage (sessions, cache, logs, keys)
+      - auth-storage:/var/www/auth-service/storage
+      - auth-cache:/var/www/auth-service/bootstrap/cache
+    networks:
+      - emp-backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "php", "artisan", "health:check"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # RabbitMQ Message Broker
+  # ============================================
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: emp-rabbitmq
     hostname: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: emp
-      RABBITMQ_DEFAULT_PASS: emp
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-emp}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-emp}
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit log_levels [{connection,error},{default,warning}]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # PostgreSQL - Auth Service Database
+  # ============================================
   postgres-auth:
     image: postgres:17-alpine
     container_name: emp-postgres-auth
     ports:
-      - "5433:5432"
+      - "${POSTGRES_AUTH_PORT:-5433}:5432"
     environment:
       POSTGRES_DB: emp_auth
-      POSTGRES_USER: emp
-      POSTGRES_PASSWORD: emp
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      POSTGRES_USER: ${POSTGRES_USER:-emp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emp}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: 
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+      - "-c"
+      - "listen_addresses=*"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emp -d emp_auth"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_auth"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
+      # Persist database data
       - postgres-auth-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # Custom PostgreSQL configuration
       - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # Initialization scripts
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # PostgreSQL - Order Service Database
+  # ============================================
   postgres-order:
     image: postgres:17-alpine
     container_name: emp-postgres-order
     ports:
-      - "5434:5432"
+      - "${POSTGRES_ORDER_PORT:-5434}:5432"
     environment:
       POSTGRES_DB: emp_order
-      POSTGRES_USER: emp
-      POSTGRES_PASSWORD: emp
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      POSTGRES_USER: ${POSTGRES_USER:-emp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emp}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: 
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+      - "-c"
+      - "listen_addresses=*"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emp -d emp_order"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_order"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
       - postgres-order-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # PostgreSQL - Inventory Service Database
+  # ============================================
   postgres-inventory:
     image: postgres:17-alpine
     container_name: emp-postgres-inventory
     ports:
-      - "5435:5432"
+      - "${POSTGRES_INVENTORY_PORT:-5435}:5432"
     environment:
       POSTGRES_DB: emp_inventory
-      POSTGRES_USER: emp
-      POSTGRES_PASSWORD: emp
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      POSTGRES_USER: ${POSTGRES_USER:-emp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emp}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: 
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+      - "-c"
+      - "listen_addresses=*"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emp -d emp_inventory"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_inventory"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
       - postgres-inventory-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # PostgreSQL - Payment Service Database
+  # ============================================
   postgres-payment:
     image: postgres:17-alpine
     container_name: emp-postgres-payment
     ports:
-      - "5436:5432"
+      - "${POSTGRES_PAYMENT_PORT:-5436}:5432"
     environment:
       POSTGRES_DB: emp_payment
-      POSTGRES_USER: emp
-      POSTGRES_PASSWORD: emp
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      POSTGRES_USER: ${POSTGRES_USER:-emp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emp}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: 
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+      - "-c"
+      - "listen_addresses=*"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emp -d emp_payment"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_payment"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
       - postgres-payment-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # MongoDB - Product Service Database
+  # ============================================
   mongodb:
     image: mongo:7.0
     container_name: emp-mongodb
-    command: ["mongod", "--replSet", "emp-rs0", "--bind_ip_all"]
+    command: 
+      - "mongod"
+      - "--replSet"
+      - "emp-rs0"
+      - "--bind_ip_all"
+      - "--wiredTigerCacheSizeGB"
+      - "1"
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT:-27017}:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
     volumes:
       - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # MongoDB Replica Set Initialization
+  # ============================================
   mongo-init-replica:
     image: mongo:7.0
     container_name: emp-mongo-init-replica
@@ -139,23 +295,31 @@ services:
     networks:
       - emp-backend
 
+  # ============================================
+  # Redis Master
+  # ============================================
   redis-master:
     image: redis:7.2-alpine
     container_name: emp-redis-master
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     ports:
-      - "6379:6379"
+      - "${REDIS_MASTER_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - redis-master-data:/data
       - ./infrastructure/docker/redis/redis-master.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # Redis Replica 1
+  # ============================================
   redis-replica-1:
     image: redis:7.2-alpine
     container_name: emp-redis-replica-1
@@ -168,12 +332,17 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - redis-replica-1-data:/data
       - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # Redis Replica 2
+  # ============================================
   redis-replica-2:
     image: redis:7.2-alpine
     container_name: emp-redis-replica-2
@@ -186,12 +355,17 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - redis-replica-2-data:/data
       - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # Redis Sentinel 1
+  # ============================================
   redis-sentinel-1:
     image: redis:7.2-alpine
     container_name: emp-redis-sentinel-1
@@ -205,17 +379,22 @@ services:
         "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
       ]
     ports:
-      - "26379:26379"
+      - "${REDIS_SENTINEL_1_PORT:-26379}:26379"
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # Redis Sentinel 2
+  # ============================================
   redis-sentinel-2:
     image: redis:7.2-alpine
     container_name: emp-redis-sentinel-2
@@ -229,17 +408,22 @@ services:
         "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
       ]
     ports:
-      - "26380:26379"
+      - "${REDIS_SENTINEL_2_PORT:-26380}:26379"
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+  # ============================================
+  # Redis Sentinel 3
+  # ============================================
   redis-sentinel-3:
     image: redis:7.2-alpine
     container_name: emp-redis-sentinel-3
@@ -253,28 +437,76 @@ services:
         "cp /etc/redis-source/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf"
       ]
     ports:
-      - "26381:26379"
+      - "${REDIS_SENTINEL_3_PORT:-26381}:26379"
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 20s
     volumes:
       - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
+    restart: unless-stopped
 
+# ============================================
+# Networks
+# ============================================
 networks:
   emp-backend:
     driver: bridge
+    name: emp-backend
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
+# ============================================
+# Volumes - Data Persistence
+# ============================================
 volumes:
+  # Auth Service Volumes
+  auth-storage:
+    driver: local
+    name: emp-auth-storage
+  auth-cache:
+    driver: local
+    name: emp-auth-cache
+  
+  # Message Broker
   rabbitmq-data:
+    driver: local
+    name: emp-rabbitmq-data
+  
+  # PostgreSQL Volumes
   postgres-auth-data:
+    driver: local
+    name: emp-postgres-auth-data
   postgres-order-data:
+    driver: local
+    name: emp-postgres-order-data
   postgres-inventory-data:
+    driver: local
+    name: emp-postgres-inventory-data
   postgres-payment-data:
+    driver: local
+    name: emp-postgres-payment-data
+  
+  # MongoDB Volumes
   mongodb-data:
+    driver: local
+    name: emp-mongodb-data
+  mongodb-config:
+    driver: local
+    name: emp-mongodb-config
+  
+  # Redis Volumes
   redis-master-data:
+    driver: local
+    name: emp-redis-master-data
   redis-replica-1-data:
+    driver: local
+    name: emp-redis-replica-1-data
   redis-replica-2-data:
+    driver: local
+    name: emp-redis-replica-2-data
