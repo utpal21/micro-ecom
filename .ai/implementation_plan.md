@@ -21,17 +21,18 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | Phase 1: Project Initialization & Monorepo Setup | COMPLETE | Monorepo structure created, base infrastructure booted and verified, Swagger registry seed added |
 | Phase 2: Shared Packages & Core Infrastructure | COMPLETE | Shared packages implemented, TypeScript builds verified, Nginx base config validated |
 | Phase 3: Auth Service | COMPLETE | Laravel 13 auth service implemented, JWT/JWKS flows tested, OpenAPI added |
-| Phase 4: Product Service | NOT STARTED | Pending |
+| Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
 | Phase 5: Inventory Service | NOT STARTED | Pending |
 | Phase 6: Order Service | NOT STARTED | Pending |
 | Phase 7: Payment Service | NOT STARTED | Pending |
 | Phase 8: Notification Service | NOT STARTED | Pending |
-| Phase 9: API Gateway & Security Hardening | NOT STARTED | Pending |
-| Phase 10: Frontend Integration | NOT STARTED | Pending |
-| Phase 11: Deployment Readiness & Observability | NOT STARTED | Pending |
+| Phase 9: Admin Service | NOT STARTED | Pending - Comprehensive admin dashboard backend |
+| Phase 10: API Gateway & Security Hardening | NOT STARTED | Pending |
+| Phase 11: Frontend Integration | NOT STARTED | Pending |
+| Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `3 / 11`
-**Current Phase:** `Phase 4 - Product Service`
+**Completed Phases:** `4 / 12`
+**Current Phase:** `Phase 5 - Inventory Service`
 
 ---
 
@@ -156,7 +157,103 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 9. **Testing Matrix:** Implement unit (template rendering, retry logic), integration (RabbitMQ flow), failure (SMTP outage, DLQ handling).
 10. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck, and resource limits.
 
-## Phase 9: API Gateway (Nginx)
+## Phase 9: Admin Service (Next.js 14)
+**Goal:** Centralized Admin Dashboard Backend with RBAC (Port: 8007).
+**Documentation:** See `.ai/admin-service/` for comprehensive design docs (README, ARCHITECTURE, DATABASE_SCHEMA, API_SPECIFICATION, EVENT_INTEGRATION, SECURITY, IMPLEMENTATION_PLAN).
+1. **Setup & DB:** Initialize Next.js 14 with App Router, PostgreSQL via PgBouncer for admin data, Redis for caching and sessions.
+2. **Folder Structure:** Create module-based layout: `src/modules/` (auth, products, orders, inventory, customers, dashboard, reports, vendors, content), `src/events/` (consumers, publishers), `src/middleware/` (auth, rbac, audit).
+3. **OpenTelemetry Bootstrap:** Initialize OTel SDK BEFORE any application code in `src/lib/otel.ts`.
+4. **Config Module:** Create config service validating ALL environment variables at startup using Zod.
+5. **Health Endpoints:** Implement `/health/live` (always 200) and `/health/ready` (checks PostgreSQL, Redis, RabbitMQ) FIRST.
+6. **JWT Auth Integration:** Implement RS256 token validation with 8-step local JWKS flow from Auth Service, Redis cache for keys.
+7. **Authentication Module:** 
+   - Login/logout endpoints with Auth Service integration
+   - Token refresh mechanism
+   - 2FA (Two-Factor Authentication) using speakeasy/TOTP
+   - Admin user management
+8. **Authorization (RBAC):**
+   - Define 7 roles: super_admin, admin, finance_manager, inventory_manager, content_manager, support_manager, product_manager
+   - Implement permission matrix with granular permissions
+   - RBAC middleware for API protection
+   - Role assignment and management
+9. **Audit Logging:**
+   - Comprehensive audit trail for all admin actions
+   - Log structure: admin_id, action, resource_type, resource_id, old_values, new_values, ip_address, user_agent
+   - Audit query API with filtering
+   - Sensitive data redaction
+10. **Product Management:**
+    - List, create, update, delete products (with permission checks)
+    - Product approval workflow for vendor products
+    - Bulk operations (publish, unpublish, delete)
+    - Product approval/rejection with event publishing
+11. **Order Management:**
+    - List orders with advanced filtering (status, date, customer)
+    - Order detail view
+    - Order status update workflow with validation
+    - Order analytics (statistics, revenue, breakdown)
+    - Bulk order operations
+12. **Inventory Management:**
+    - Inventory overview
+    - Low stock alerts
+    - Stock adjustment endpoint
+    - Inventory alerts management
+    - Integration with Inventory Service via events
+13. **Customer Management:**
+    - Customer list with search and filtering
+    - Customer detail view
+    - Block/unblock customers
+    - Customer order history
+    - Customer analytics (CLV, AOV, retention)
+14. **Dashboard Module:**
+    - KPI aggregation (orders, revenue, users, products)
+    - Graph data generation (sales trends, revenue trends)
+    - Alert center (low stock, pending approvals, issues)
+    - Caching strategy for dashboard metrics (5-15 min TTL)
+15. **Reports Module:**
+    - Sales reports (daily, weekly, monthly)
+    - Revenue reports (by category, time period)
+    - Product performance reports (top-selling, low-performing)
+    - Customer analytics reports (retention, CLV, AOV)
+    - Custom report builder
+    - Report scheduling and export (PDF, CSV)
+16. **Vendor Management:**
+    - Vendor list and detail views
+    - Vendor performance metrics
+    - Settlement tracking
+    - Settlement processing
+17. **Content Management:**
+    - Banner management (CRUD operations)
+    - Display period logic
+    - Active/inactive toggle
+    - Image upload to S3/MinIO
+18. **Event Integration:**
+    - **Consumed Events:** order.created, order.updated, order.cancelled, product.created, product.updated, inventory.updated, inventory.low_stock, payment.completed, payment.failed, payment.refunded, user.registered, user.blocked
+    - **Published Events:** product.approved, product.rejected, order.status.updated, inventory.adjusted, customer.blocked, customer.unblocked
+    - Implement event consumers for all consumed events
+    - Implement event publishers for all published events
+    - Idempotency handling via Redis (`event:processed:{event_id}` TTL 7 days)
+    - DLQ setup for failed events
+19. **Security Implementation:**
+    - JWT token validation (RS256 from Auth Service)
+    - RBAC middleware with permission checking
+    - 2FA implementation with TOTP
+    - Encryption utility (AES-256-GCM) for sensitive data
+    - Input sanitization (DOMPurify for HTML)
+    - Rate limiting (Redis-based)
+    - Security headers (HSTS, CSP, X-Frame-Options, etc.)
+    - IP whitelisting (optional)
+20. **Redis Key Registry:**
+    - `dashboard:kpi:*` (300s TTL)
+    - `dashboard:graph:*` (600s TTL)
+    - `reports:*` (1800s TTL)
+    - `event:processed:*` (604800s TTL - 7 days)
+    - `jwks:public_keys` (3600s TTL)
+    - `rate_limit:*` (varies by endpoint)
+21. **Prometheus Metrics:** Expose required metrics including `http_requests_total`, `http_request_duration_seconds`, `db_query_duration_seconds`, `cache_hits_total`, `cache_misses_total`, `rabbitmq_messages_consumed_total{queue,status}`, `auth_failures_total`, `rate_limit_exceeded_total`.
+22. **Testing Matrix:** Implement unit (business logic, RBAC, audit logging), integration (API, event flow, caching), contract (OpenAPI schema), event (publish/consume round-trip), idempotency (duplicate events), failure (dependency outage), performance (P95 < 200ms).
+23. **Docker Production:** Create multi-stage Dockerfile with non-root user, HEALTHCHECK directive, resource limits in docker-compose, and PgBouncer sidecar.
+
+## Phase 10: API Gateway (Nginx)
 **Goal:** Finalize Nginx configurations with security hardening.
 1. **Gateway Rules:** Configure `nginx.conf` routing to upstream service architectures (`proxy_pass`).
 2. **Rate Limiting:** Enforce strict limits: auth zone (10r/m burst 5), api zone (100r/m burst 20).
@@ -165,7 +262,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 5. **CORS Policy:** Configure CORS for API Gateway (allow from frontend domain); do NOT add CORS to internal service-to-service calls.
 6. **Testing:** Verify rate limit returns JSON 429, security headers present, internal services communicate without CORS.
 
-## Phase 10: Frontend Integration (Next.js 14)
+## Phase 11: Frontend Integration (Next.js 14)
 **Goal:** User-facing Web Application.
 1. **Setup:** Next.js 14 App Router, set up TailwindCSS and UI component library.
 2. **State Management:** Setup `next-auth` (v5) with httpOnly cookies for JWT, Zustand (for cart UI preferences), and TanStack React Query (for server state).
@@ -178,7 +275,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 6. **Dashboards:** Customer, Vendor, and Admin Role-Based protected views.
 7. **Testing:** Implement error boundary fallbacks, verify auth state management, test error scenarios.
 
-## Phase 11: Deployment Readiness & Observability
+## Phase 12: Deployment Readiness & Observability
 **Goal:** Prepare for production SLA.
 1. **Observability Stack:** Deploy Promtail, Loki, Prometheus, Grafana, and Jaeger in `docker-compose.yml`.
 2. **OpenTelemetry Bootstrap:** Ensure ALL services initialize OTel SDK BEFORE any application code (NestJS: main.ts, Laravel: bootstrap/app.php).
@@ -199,3 +296,12 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 ---
 **What's Next?**
 If approved, we will begin with **Phase 4: Product Service (NestJS 11)**.
+
+**Note:** Detailed Admin Service design documentation is available in `.ai/admin-service/` including:
+- `README.md` - Overview and quick start
+- `ARCHITECTURE.md` - System architecture and design patterns
+- `DATABASE_SCHEMA.md` - Complete database schema with migrations
+- `API_SPECIFICATION.md` - Full API documentation with examples
+- `EVENT_INTEGRATION.md` - Event-driven architecture details
+- `SECURITY.md` - Security implementation and best practices
+- `IMPLEMENTATION_PLAN.md` - Detailed 8-week implementation roadmap
