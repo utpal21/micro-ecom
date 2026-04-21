@@ -463,7 +463,7 @@ Recommended structure:
 - `app/Repositories`
 - `app/Events` and `app/Listeners`
 
-### 7.2 NestJS 10 Services
+### 7.2 NestJS 11 Services
 
 Applies to: `product-service`, `inventory-service`, `payment-service`
 

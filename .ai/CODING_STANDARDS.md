@@ -536,16 +536,100 @@ describe('AuthService', () => {
 ## Monitoring & Observability
 
 ### Logging Standards (ALL Services)
-- **Structured Logging**: Use JSON structured logging
-- **Log Levels**: Use appropriate log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- **Contextual Information**: Include request ID, user ID, timestamps
-- **No Secrets**: Never log sensitive data
+
+#### Structured Log Schema
+Every log line emitted across the platform MUST be valid JSON with these fields:
+
+```json
+{
+  "timestamp": "2026-04-20T12:00:00.000Z",
+  "level": "info",
+  "service": "product-service",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "span_id": "00f067aa0ba902b7",
+  "request_id": "req-uuid-here",
+  "user_id": "user-uuid-or-null",
+  "message": "Product created successfully",
+  "duration_ms": 42,
+  "status_code": 201,
+  "meta": {}
+}
+```
+
+#### Log Levels
+- **DEBUG**: Detailed diagnostic information for debugging
+- **INFO**: General informational messages about normal operations
+- **WARNING**: Warning messages for unexpected but recoverable situations
+- **ERROR**: Error messages for failures that don't prevent the application from running
+- **CRITICAL**: Critical error messages that require immediate attention
+
+#### Fields That Must NEVER Appear in Logs
+- `password`, `token`, `access_token`, `refresh_token`
+- `val_id`, `store_passwd`, `tran_id` (raw SSLCommerz values)
+- `private_key`, `secret`
+- Full credit card numbers or bank account numbers
+
+#### Log Redaction Rules
+All logging implementations must have automatic redaction for:
+- JWT tokens (replace with `[REDACTED_TOKEN]`)
+- API keys and secrets (replace with `[REDACTED_SECRET]`)
+- Credit card numbers (replace with `************1234`)
+- Passwords in any form (replace with `[REDACTED_PASSWORD]`)
+
+### Error Taxonomy (ALL Services)
+
+Define these error codes in `packages/shared-types/src/errors.ts`. Use them in ALL services.
+
+```typescript
+export const ErrorCode = {
+  // Validation
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+
+  // Auth
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  FORBIDDEN: 'FORBIDDEN',
+  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
+
+  // Domain
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
+  INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
+  INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
+  IDEMPOTENCY_KEY_MISSING: 'IDEMPOTENCY_KEY_MISSING',
+
+  // Payment
+  PAYMENT_VALIDATION_FAILED: 'PAYMENT_VALIDATION_FAILED',
+  LEDGER_IMBALANCED: 'LEDGER_IMBALANCED',
+
+  // Infrastructure
+  DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+```
 
 ### Metrics
 - **Request Metrics**: Track request count, duration, error rate
 - **Database Metrics**: Track query count, duration, connection count
 - **Cache Metrics**: Track hit rate, miss rate, latency
 - **Service Metrics**: Track CPU, memory, disk usage
+
+#### Required Prometheus Metrics (All NestJS Services)
+Every NestJS service must expose these metrics:
+
+```typescript
+// Required for every service
+http_requests_total{method, route, status_code}      // Counter
+http_request_duration_seconds{method, route}          // Histogram (p50/p95/p99)
+db_query_duration_seconds{operation, collection}      // Histogram
+cache_hits_total{cache_name}                          // Counter
+cache_misses_total{cache_name}                        // Counter
+rabbitmq_messages_consumed_total{queue, status}       // Counter (status: success|failure|dlq)
+```
 
 ---
 

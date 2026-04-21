@@ -316,6 +316,56 @@ services/{service-name}/
 └── .eslintrc.js               # ESLint configuration
 ```
 
+### NestJS Service Structure (Concrete Module Layout - MANDATORY)
+Every NestJS service (Product, Inventory, Payment) MUST follow this exact folder structure with domain/application/infrastructure separation:
+
+```
+services/{service-name}/src/
+├── main.ts                     # Bootstrap only — OTel init, config validation, listen
+├── app.module.ts               # Root module — wires global providers
+├── config/
+│   └── config.service.ts       # Validates all env at startup via Joi or class-validator
+├── health/
+│   ├── health.controller.ts    # GET /health/live, /health/ready
+│   └── health.module.ts
+├── common/
+│   ├── filters/                # Global exception filter → standardized error JSON
+│   ├── interceptors/           # Logging interceptor, response transform interceptor
+│   ├── guards/                 # JwtAuthGuard (local JWKS validation)
+│   ├── decorators/             # @CurrentUser(), @Roles(), @Public()
+│   ├── pipes/                  # ZodValidationPipe
+│   └── middleware/             # TraceContextMiddleware (X-Request-ID propagation)
+├── products/                    # OR inventory/payments — domain module
+│   ├── domain/
+│   │   ├── product.entity.ts   # Domain model — never a Mongoose doc directly
+│   │   └── product.errors.ts   # ProductNotFoundError, ProductConflictError, etc.
+│   ├── application/
+│   │   ├── commands/           # CreateProductCommand, UpdateProductCommand
+│   │   ├── queries/            # GetProductQuery, ListProductsQuery
+│   │   └── product.service.ts  # Orchestrates commands/queries, no DB calls here
+│   ├── infrastructure/
+│   │   ├── schemas/            # Mongoose schema (separate from domain entity)
+│   │   ├── repositories/       # ProductRepository implements IProductRepository
+│   │   └── cache/              # ProductCacheService (Redis cache-aside + Redlock)
+│   ├── interfaces/
+│   │   ├── http/
+│   │   │   ├── products.controller.ts
+│   │   │   └── dto/            # CreateProductDto, UpdateProductDto (Zod-backed)
+│   │   └── events/
+│   │       └── product-events.consumer.ts
+│   └── products.module.ts
+├── categories/                  # (same structure as products/)
+```
+
+#### Key Principles for NestJS Module Layout:
+- **Domain Layer**: Pure business logic, no framework dependencies, domain entities separate from persistence models
+- **Application Layer**: Use-cases and services that orchestrate domain logic
+- **Infrastructure Layer**: External concerns (DB, cache, external APIs) implementing interfaces
+- **Interfaces Layer**: HTTP controllers, DTOs, event consumers - thin layer that adapts to outside world
+- **Common Layer**: Cross-cutting concerns (auth, logging, error handling, validation)
+- **Separation of Concerns**: Controllers → Services → Repositories, never controllers calling repositories directly
+- **Error Hierarchy**: Domain errors in each domain module, infrastructure errors in common
+
 ### Python Service Structure (FastAPI/Flask)
 Each Python service should follow this structure:
 

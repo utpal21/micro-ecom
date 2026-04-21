@@ -87,10 +87,10 @@ These rules are **non-negotiable**. Violating any constraint requires an Archite
 │   └── api-gateway/                # Nginx reverse proxy (routing, rate limiting, TLS termination)
 ├── services/
 │   ├── auth-service/               # Laravel 13 — JWT/RS256, OAuth2, RBAC, JWKS endpoint
-│   ├── product-service/            # NestJS 10 — product catalogue, search, categorisation
+│   ├── product-service/            # NestJS 11 — product catalogue, search, categorisation
 │   ├── order-service/              # Laravel 13 — order lifecycle, state machine, history
-│   ├── inventory-service/          # NestJS 10 — stock ledger, reservation, deduction
-│   ├── payment-service/            # NestJS 10 — SSLCommerz, COD, reconciliation, ledger
+│   ├── inventory-service/          # NestJS 11 — stock ledger, reservation, deduction
+│   ├── payment-service/            # NestJS 11 — SSLCommerz, COD, reconciliation, ledger
 │   └── notification-service/       # Node.js 22 lightweight — email/SMS dispatch, templates
 ├── packages/
 │   ├── shared-types/               # TypeScript interfaces & Zod schemas shared across services
@@ -137,10 +137,10 @@ These rules are **non-negotiable**. Violating any constraint requires an Archite
 | Service | Framework | Database | Port | Domain |
 |---------|-----------|----------|------|--------|
 | Auth Service | Laravel 13 | PostgreSQL 17 | 8001 | Identity & Access Management |
-| Product Service | NestJS 10 | MongoDB 7.0 | 8002 | Product Catalogue & Search |
+| Product Service | NestJS 11 | MongoDB 7.0 | 8002 | Product Catalogue & Search |
 | Order Service | Laravel 13 | PostgreSQL 17 | 8003 | Order Lifecycle Management |
-| Inventory Service | NestJS 10 | PostgreSQL 17 | 8004 | Stock Ledger & Reservation |
-| Payment Service | NestJS 10 | PostgreSQL 17 | 8005 | Payment Processing & Ledger |
+| Inventory Service | NestJS 11 | PostgreSQL 17 | 8004 | Stock Ledger & Reservation |
+| Payment Service | NestJS 11 | PostgreSQL 17 | 8005 | Payment Processing & Ledger |
 | Notification Service | Node.js 22 (lightweight) | Stateless (Redis) | 8006 | Email / SMS Dispatch |
 
 ---
@@ -183,7 +183,7 @@ These rules are **non-negotiable**. Violating any constraint requires an Archite
 
 ### 4.2 Product Service
 
-**Framework:** NestJS 10 | **DB:** MongoDB 7.0 | **Port:** 8002
+**Framework:** NestJS 11 | **DB:** MongoDB 7.0 | **Port:** 8002
 
 **Responsibilities:**
 - Product CRUD with variant support (size, color, SKU)
@@ -246,7 +246,7 @@ These rules are **non-negotiable**. Violating any constraint requires an Archite
 
 ### 4.4 Inventory Service
 
-**Framework:** NestJS 10 | **DB:** PostgreSQL 17 | **Port:** 8004
+**Framework:** NestJS 11 | **DB:** PostgreSQL 17 | **Port:** 8004
 
 **Responsibilities:**
 - Stock level tracking per SKU
@@ -275,7 +275,7 @@ These rules are **non-negotiable**. Violating any constraint requires an Archite
 
 ### 4.5 Payment Service
 
-**Framework:** NestJS 10 | **DB:** PostgreSQL 17 | **Port:** 8005
+**Framework:** NestJS 11 | **DB:** PostgreSQL 17 | **Port:** 8005
 
 **Responsibilities:**
 - SSLCommerz integration (primary gateway — BD market)
