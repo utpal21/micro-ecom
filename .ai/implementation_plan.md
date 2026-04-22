@@ -18,21 +18,21 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 
 | Phase | Status | Notes |
 |------|--------|-------|
-| Phase 1: Project Initialization & Monorepo Setup | COMPLETE | Monorepo structure created, base infrastructure booted and verified, Swagger registry seed added |
-| Phase 2: Shared Packages & Core Infrastructure | COMPLETE | Shared packages implemented, TypeScript builds verified, Nginx base config validated |
-| Phase 3: Auth Service | COMPLETE | Laravel 13 auth service implemented, JWT/JWKS flows tested, OpenAPI added |
-| Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
-| Phase 5: Inventory Service | NOT STARTED | Pending |
-| Phase 6: Order Service | NOT STARTED | Pending |
-| Phase 7: Payment Service | NOT STARTED | Pending |
-| Phase 8: Notification Service | NOT STARTED | Pending |
-| Phase 9: Admin Service | NOT STARTED | Pending - Comprehensive admin dashboard backend |
-| Phase 10: API Gateway & Security Hardening | NOT STARTED | Pending |
-| Phase 11: Frontend Integration | NOT STARTED | Pending |
-| Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
+| | Phase 1: Project Initialization & Monorepo Setup | COMPLETE | Monorepo structure created, base infrastructure booted and verified, Swagger registry seed added |
+| | Phase 2: Shared Packages & Core Infrastructure | COMPLETE | Shared packages implemented, TypeScript builds verified, Nginx base config validated |
+| | Phase 3: Auth Service | COMPLETE | Laravel 13 auth service implemented, JWT/JWKS flows tested, OpenAPI added |
+| | Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
+| | Phase 5: Inventory Service | COMPLETE | All 16 requirements + bonus Redis caching: DDD structure, stock ledger, pessimistic locking, reservations, idempotency, OpenTelemetry, health checks, JWT validation, event consumers, Redis cache with TTL/warming/invalidation, comprehensive tests (87+ tests), Docker setup |
+| | Phase 6: Order Service | NOT STARTED | Pending |
+| | Phase 7: Payment Service | NOT STARTED | Pending |
+| | Phase 8: Notification Service | NOT STARTED | Pending |
+| | Phase 9: Admin Service | NOT STARTED | Pending - Comprehensive admin dashboard backend |
+| | Phase 10: API Gateway & Security Hardening | NOT STARTED | Pending |
+| | Phase 11: Frontend Integration | NOT STARTED | Pending |
+| | Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `4 / 12`
-**Current Phase:** `Phase 5 - Inventory Service`
+**Completed Phases:** `5 / 12`
+**Current Phase:** `Phase 6 - Order Service (Ready to Start)`
 
 ---
 
