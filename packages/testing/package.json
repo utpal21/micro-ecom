@@ -1,0 +1,32 @@
+{
+    "name": "@emp/testing",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "amqplib": "^0.10.0",
+        "ioredis": "^5.4.0",
+        "@emp/event-bus": "workspace:*",
+        "@emp/shared-types": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.4.0",
+        "vitest": "^1.0.0",
+        "@vitest/ui": "^1.0.0"
+    },
+    "peerDependencies": {
+        "vitest": "*"
+    }
+}

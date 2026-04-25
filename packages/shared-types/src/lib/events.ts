@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { moneyPaisaSchema, orderSnapshotSchema, paymentMethodSchema } from "./order.js";
+import { moneyPaisaSchema } from "./money.js";
+import { orderSnapshotSchema, paymentMethodSchema } from "./order.js";
 
 export const eventNameSchema = z.enum([
   "order.created",

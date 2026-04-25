@@ -1,7 +1,7 @@
 # Enterprise Marketplace Platform (EMP) — Implementation Plan
 
 > **Based on:** Enterprise Marketplace Platform (EMP) SRS v3.0.0
-> **Architecture:** Microservices, Event-Driven, DDD, CQRS, Event Sourcing
+> **Architecture:** Microservices, Event-Driven, DDD, CQRS, Event-Driven Architecture with Transactional Outbox
 
 This document outlines the step-by-step implementation plan. We will follow this sequence strictly, ensuring no service is built without its required foundations and integrations. **Do not skip ahead.**
 
@@ -23,16 +23,19 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 3: Auth Service | COMPLETE | Laravel 13 auth service implemented, JWT/JWKS flows tested, OpenAPI added |
 | | Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
 | | Phase 5: Inventory Service | COMPLETE | All 16 requirements + bonus Redis caching: DDD structure, stock ledger, pessimistic locking, reservations, idempotency, OpenTelemetry, health checks, JWT validation, event consumers, Redis cache with TTL/warming/invalidation, comprehensive tests (87+ tests), Docker setup |
-| | Phase 6: Order Service | NOT STARTED | Pending |
-| | Phase 7: Payment Service | NOT STARTED | Pending |
+| | Phase 6: Order Service | BLOCKED | Requires Phase 2.5 prerequisites (Transactional Outbox, PgBouncer, Circuit Breaker, etc.) |
+| | Phase 7: Payment Service | BLOCKED | Requires Phase 2.5 prerequisites (Transactional Outbox, PgBouncer, Circuit Breaker, etc.) |
 | | Phase 8: Notification Service | NOT STARTED | Pending |
-| | Phase 9: Admin Service | NOT STARTED | Pending - Comprehensive admin dashboard backend |
-| | Phase 10: API Gateway & Security Hardening | NOT STARTED | Pending |
-| | Phase 11: Frontend Integration | NOT STARTED | Pending |
-| | Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
+| | Phase 9a: Admin API Service | NOT STARTED | NestJS 11 backend with RBAC, audit trail, event integration |
+| | Phase 9b: Admin Frontend | NOT STARTED | Next.js 14 dashboard UI |
+| | Phase 10: Search/Catalog Service | NOT STARTED | NestJS 11 + Elasticsearch for product search |
+| | Phase 11: API Gateway & Security Hardening | NOT STARTED | Pending |
+| | Phase 12: Frontend Integration | NOT STARTED | Pending |
+| | Phase 13: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `5 / 12`
-**Current Phase:** `Phase 6 - Order Service (Ready to Start)`
+**Completed Phases:** `5 / 13`
+**Current Phase:** `Phase 2.5 - Shared Packages Foundation (REQUIRED before Phase 6)`
+**Next Phase:** `Phase 6 - Order Service (NestJS 11) - BLOCKED until prerequisites complete`
 
 ---
 
@@ -107,22 +110,52 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 15. **Testing Matrix:** Implement unit (reservation logic, ledger), concurrency (simultaneous reservations), idempotency (duplicate events), integration (API, event flow), failure (RabbitMQ consumer mid-transaction).
 16. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck, resource limits, and PgBouncer sidecar.
 
-## Phase 6: Order Service (Laravel 13)
+## Phase 2.5: Shared Packages Foundation (CRITICAL PREREQUISITE)
+**Goal:** Implement critical shared packages before Phase 6 (Order Service).
+**Documentation:** See `.ai/SHARED_PACKAGES_SPECIFICATION.md` for detailed specifications.
+1. **`packages/shared-types` Enhancements:**
+   - Branded `Paisa` type for type-safe money operations
+   - Role/Permission enums and mapping functions
+   - Centralized error codes with HTTP status mapping
+   - Redis key registry with TTL, owner, and invalidation logic
+2. **`packages/event-bus` Transactional Outbox:**
+   - Outbox pattern implementation for reliable event delivery
+   - Schema validation on incoming events
+   - Built-in idempotency decorator for consumers
+   - Background outbox processor
+3. **`packages/utils` Logger Redaction:**
+   - Automatic sensitive field redaction (password, token, secret, etc.)
+   - Enhanced structured JSON logging
+   - Centralized redaction logic
+4. **`packages/http-client` (NEW):**
+   - Axios wrapper with automatic trace propagation
+   - Circuit breaker logic using opossum
+   - Retry with exponential backoff
+   - Unified error handling
+5. **`packages/testing` (NEW):**
+   - Testcontainers setup for Postgres/MongoDB/Redis/RabbitMQ
+   - Mock factories for common domain objects
+   - Shared test utilities and fixtures
+
+## Phase 6: Order Service (NestJS 11)
 **Goal:** Order fulfillment state machine and history (Port: 8003).
-1. **Setup & DB:** Initialize Laravel 13 with PostgreSQL via PgBouncer (transaction mode).
-2. **OpenTelemetry Bootstrap:** Initialize OTel SDK in bootstrap/app.php BEFORE application boot.
-3. **Config Module:** Validate ALL environment variables at startup.
-4. **Health Endpoints:** Implement `/health/live` and `/health/ready` (checks PostgreSQL, Redis, RabbitMQ) FIRST.
-5. **Domain Implementation:** Create migrations for `orders` and `order_items` (prices snapshot in integer paisa - NEVER reference product price table).
-6. **State Machine Contract:** Implement `OrderStateMachine` class with ALLOWED_TRANSITIONS map; forbidden transitions MUST throw `InvalidOrderTransitionException`.
-7. **Status History:** Create `order_status_history` table; write history record BEFORE updating current status.
-8. **Idempotency Enforcement:** Order creation MUST enforce `Idempotency-Key` header; return cached result with HTTP 200 if key exists.
-9. **Redis Key Registry:** Implement `order:idempotency:{key}` with 86400s TTL, `cart:{user_id}` with 7200s TTL.
-10. **Transactional Outbox:** Create `outbox_events` table for reliable event publishing; INSERT to outbox in same transaction as business write.
-11. **Event Publisher & Consumer:** Publish `order.created`, `order.cancelled` via outbox. Consume `payment.completed` and `payment.cod_collected` to advance states (PENDING -> PAID).
-12. **Prometheus Metrics:** Expose required metrics including `rabbitmq_messages_consumed_total{queue,status}`.
-13. **Testing Matrix:** Implement unit (state machine transitions, idempotency), integration (API, event flow), failure (dependency outage).
-14. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck, resource limits, and PgBouncer sidecar.
+**Note:** Changed from Laravel 13 to NestJS 11 per Staff Architect Review for better event-driven support and shared packages consumption.
+1. **Setup & DB:** Initialize NestJS 11 with PostgreSQL via PgBouncer (transaction mode).
+2. **Folder Structure:** Create concrete module layout with domain/application/infrastructure/interfaces separation.
+3. **OpenTelemetry Bootstrap:** Initialize OTel SDK BEFORE anything else in main.ts.
+4. **Config Module:** Create config service that validates ALL environment variables at startup.
+5. **Health Endpoints:** Implement `/health/live` and `/health/ready` (checks PostgreSQL, Redis, RabbitMQ) FIRST.
+6. **JWT Validator Middleware:** Implement the 8-step local JWKS validation flow.
+7. **Domain Implementation:** Create migrations for `orders` and `order_items` (prices snapshot in integer paisa - NEVER reference product price table).
+8. **State Machine Contract:** Implement `OrderStateMachine` class with ALLOWED_TRANSITIONS map; forbidden transitions MUST throw `InvalidOrderTransitionException`.
+9. **Status History:** Create `order_status_history` table; write history record BEFORE updating current status.
+10. **Idempotency Enforcement:** Order creation MUST enforce `Idempotency-Key` header; return cached result with HTTP 200 if key exists.
+11. **Redis Key Registry:** Implement `order:idempotency:{key}` with 86400s TTL, `cart:{user_id}` with 7200s TTL.
+12. **Transactional Outbox:** Create `outbox_events` table for reliable event publishing; INSERT to outbox in same transaction as business write.
+13. **Event Publisher & Consumer:** Publish `order.created`, `order.cancelled` via outbox. Consume `payment.completed` and `payment.cod_collected` to advance states (PENDING -> PAID).
+14. **Prometheus Metrics:** Expose required metrics including `rabbitmq_messages_consumed_total{queue,status}`.
+15. **Testing Matrix:** Implement unit (state machine transitions, idempotency), integration (API, event flow), failure (dependency outage).
+16. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck, resource limits, and PgBouncer sidecar.
 
 ## Phase 7: Payment Service (NestJS 11)
 **Goal:** SSLCommerz Integration, COD, and Double-Entry Ledger (Port: 8005).
@@ -157,10 +190,11 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 9. **Testing Matrix:** Implement unit (template rendering, retry logic), integration (RabbitMQ flow), failure (SMTP outage, DLQ handling).
 10. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck, and resource limits.
 
-## Phase 9: Admin Service (Next.js 14)
-**Goal:** Centralized Admin Dashboard Backend with RBAC (Port: 8007).
+## Phase 9a: Admin API Service (NestJS 11)
+**Goal:** Centralized Admin Dashboard Backend API with RBAC (Port: 8007).
 **Documentation:** See `.ai/admin-service/` for comprehensive design docs (README, ARCHITECTURE, DATABASE_SCHEMA, API_SPECIFICATION, EVENT_INTEGRATION, SECURITY, IMPLEMENTATION_PLAN).
-1. **Setup & DB:** Initialize Next.js 14 with App Router, PostgreSQL via PgBouncer for admin data, Redis for caching and sessions.
+**Note:** Split from Admin Frontend per Staff Architect Review for proper separation of concerns.
+1. **Setup & DB:** Initialize NestJS 11 with PostgreSQL via PgBouncer for admin data, Redis for caching and sessions.
 2. **Folder Structure:** Create module-based layout: `src/modules/` (auth, products, orders, inventory, customers, dashboard, reports, vendors, content), `src/events/` (consumers, publishers), `src/middleware/` (auth, rbac, audit).
 3. **OpenTelemetry Bootstrap:** Initialize OTel SDK BEFORE any application code in `src/lib/otel.ts`.
 4. **Config Module:** Create config service validating ALL environment variables at startup using Zod.
@@ -253,7 +287,99 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 22. **Testing Matrix:** Implement unit (business logic, RBAC, audit logging), integration (API, event flow, caching), contract (OpenAPI schema), event (publish/consume round-trip), idempotency (duplicate events), failure (dependency outage), performance (P95 < 200ms).
 23. **Docker Production:** Create multi-stage Dockerfile with non-root user, HEALTHCHECK directive, resource limits in docker-compose, and PgBouncer sidecar.
 
-## Phase 10: API Gateway (Nginx)
+## Phase 9b: Admin Frontend (Next.js 14)
+**Goal:** Admin Dashboard UI consuming Admin API Service (Port: 8008).
+**Note:** Split from Admin API Service per Staff Architect Review for proper separation of concerns.
+1. **Setup:** Initialize Next.js 14 with App Router, TypeScript, TailwindCSS, and UI component library (shadcn/ui or similar).
+2. **Authentication:**
+   - Implement next-auth v5 with httpOnly cookies for JWT
+   - JWT validation via Admin API Service endpoints
+   - Protected routes using middleware
+   - Token refresh mechanism
+3. **State Management:**
+   - TanStack React Query for server state (API calls)
+   - Zustand for UI state (modals, filters, sidebar)
+   - React Context for auth state
+4. **Layout & Navigation:**
+   - Responsive sidebar with role-based menu items
+   - Top navigation with user profile and notifications
+   - Breadcrumb navigation
+   - Mobile-responsive design
+5. **Dashboard Pages:**
+   - Overview with KPI cards and charts
+   - Real-time alerts and notifications
+   - Quick action buttons
+6. **Product Management Pages:**
+   - Product list with search, filters, pagination
+   - Product creation/editing forms with image upload
+   - Product approval queue for vendor products
+   - Bulk operations interface
+7. **Order Management Pages:**
+   - Order list with advanced filtering
+   - Order detail view with timeline
+   - Order status update workflow
+   - Order analytics dashboard
+8. **Inventory Management Pages:**
+   - Inventory overview with stock levels
+   - Low stock alerts interface
+   - Stock adjustment forms
+9. **Customer Management Pages:**
+   - Customer list with search
+   - Customer detail view with order history
+   - Block/unblock interface
+   - Customer analytics dashboard
+10. **Reports Pages:**
+    - Report builder interface
+    - Scheduled reports management
+    - Report export (PDF, CSV)
+    - Chart visualizations
+11. **Vendor Management Pages:**
+    - Vendor list and detail views
+    - Vendor performance metrics
+    - Settlement tracking interface
+12. **Content Management Pages:**
+    - Banner management interface
+    - Image upload to S3/MinIO
+    - Display period configuration
+13. **Error Handling:**
+    - Global error boundary
+    - API error toast notifications
+    - Loading states and skeletons
+14. **Performance:**
+    - Code splitting and lazy loading
+    - Image optimization (next/image)
+    - Caching strategies
+15. **Testing:** Implement E2E tests with Playwright, unit tests with Vitest, component tests with React Testing Library.
+16. **Docker Production:** Create multi-stage Dockerfile with Nginx for static file serving, healthcheck, and resource limits.
+
+## Phase 10: Search/Catalog Service (NestJS 11)
+**Goal:** Dedicated product search and catalog service with Elasticsearch (Port: 8009).
+**Note:** New service per Staff Architect Review - search deserves its own service.
+1. **Setup & Infrastructure:**
+   - Initialize NestJS 11
+   - Setup Elasticsearch 8.x cluster
+   - Configure Redis for caching
+2. **Elasticsearch Integration:**
+   - Create product index with proper mapping
+   - Implement search with faceted filters
+   - Autocomplete/suggest functionality
+   - Aggregations for categories, price ranges, etc.
+3. **Event Integration:**
+   - Consume product.created, product.updated, product.deleted events
+   - Sync product data to Elasticsearch in near real-time
+4. **API Endpoints:**
+   - Search endpoint with pagination
+   - Faceted filtering
+   - Autocomplete endpoint
+   - Category browsing
+5. **Caching:**
+   - Cache热门 search queries
+   - Cache category trees
+   - TTL-based invalidation
+6. **Testing:** Unit tests for search logic, integration tests with Elasticsearch, event sync tests.
+7. **Docker Production:** Multi-stage Dockerfile with Elasticsearch sidecar, healthcheck, resource limits.
+
+## Phase 11: API Gateway (Nginx)
 **Goal:** Finalize Nginx configurations with security hardening.
 1. **Gateway Rules:** Configure `nginx.conf` routing to upstream service architectures (`proxy_pass`).
 2. **Rate Limiting:** Enforce strict limits: auth zone (10r/m burst 5), api zone (100r/m burst 20).
@@ -262,7 +388,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 5. **CORS Policy:** Configure CORS for API Gateway (allow from frontend domain); do NOT add CORS to internal service-to-service calls.
 6. **Testing:** Verify rate limit returns JSON 429, security headers present, internal services communicate without CORS.
 
-## Phase 11: Frontend Integration (Next.js 14)
+## Phase 12: Frontend Integration (Next.js 14)
 **Goal:** User-facing Web Application.
 1. **Setup:** Next.js 14 App Router, set up TailwindCSS and UI component library.
 2. **State Management:** Setup `next-auth` (v5) with httpOnly cookies for JWT, Zustand (for cart UI preferences), and TanStack React Query (for server state).
@@ -275,7 +401,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 6. **Dashboards:** Customer, Vendor, and Admin Role-Based protected views.
 7. **Testing:** Implement error boundary fallbacks, verify auth state management, test error scenarios.
 
-## Phase 12: Deployment Readiness & Observability
+## Phase 13: Deployment Readiness & Observability
 **Goal:** Prepare for production SLA.
 1. **Observability Stack:** Deploy Promtail, Loki, Prometheus, Grafana, and Jaeger in `docker-compose.yml`.
 2. **OpenTelemetry Bootstrap:** Ensure ALL services initialize OTel SDK BEFORE any application code (NestJS: main.ts, Laravel: bootstrap/app.php).

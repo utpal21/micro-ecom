@@ -3,14 +3,22 @@
 ## Overview
 This document explains the project structure, clarifies the purpose of various files (including .gitignore files), and provides guidance for maintaining professional-grade code quality across **all languages and frameworks**.
 
-**Technology Stack**:
+**Technology Stack** (Updated per Architect Review):
 - **Auth Service**: PHP 8.4 / Laravel 13 / PostgreSQL
-- **API Gateway**: Node.js / TypeScript
-- **Web Frontend**: React / Next.js / TypeScript
-- **Other Services**: Language-agnostic (Node.js, Python, Go, etc.)
-- **Databases**: PostgreSQL (relational), MongoDB (document), Redis (cache)
-- **Message Queue**: RabbitMQ
-- **Infrastructure**: Docker, Docker Compose, Kubernetes (future)
+- **Product Service**: Node.js / NestJS 11 / MongoDB
+- **Order Service**: PHP / Laravel 13 / PostgreSQL (via PgBouncer)
+- **Inventory Service**: Node.js / NestJS 11 / PostgreSQL (via PgBouncer)
+- **Payment Service**: Node.js / NestJS 11 / PostgreSQL (via PgBouncer)
+- **Notification Service**: Node.js 22 (lightweight)
+- **Admin API Service**: Node.js / NestJS 11 / PostgreSQL (via PgBouncer) - **NEW: Split from Admin**
+- **Admin Frontend**: React / Next.js 14 or Vite SPA - **NEW: Split from Admin API**
+- **Search/Catalog Service**: Node.js / NestJS 11 / Elasticsearch - **NEW: Dedicated search service**
+- **Vendor Service**: Node.js / NestJS 11 / PostgreSQL (via PgBouncer)
+- **API Gateway**: Nginx with potential Kong/Traefik migration
+- **Databases**: PostgreSQL 17 (per-service), MongoDB 7, Redis 7.2 (Sentinel), Elasticsearch
+- **Message Queue**: RabbitMQ 3.13 with topic exchange
+- **Infrastructure**: Docker, Docker Compose, PgBouncer (transaction mode), Kubernetes (future)
+- **Observability**: OpenTelemetry, Jaeger, Prometheus, Grafana, Loki
 
 ---
 
@@ -595,13 +603,18 @@ volumes:
 }
 ```
 
-### Service Ports
+### Service Ports (Updated)
 - Auth Service: 8001
-- Order Service: 8002
-- Inventory Service: 8003
-- Payment Service: 8004
-- Product Service: 8005
+- Product Service: 8002
+- Order Service: 8003
+- Inventory Service: 8004
+- Payment Service: 8005
 - Notification Service: 8006
+- Admin API Service: 8007 (NEW)
+- Admin Frontend: 8008 (NEW)
+- Search/Catalog Service: 8009 (NEW)
+- Vendor Service: 8010 (NEW)
+- API Gateway (Nginx): 80 / 443
 
 ---
 

@@ -64,6 +64,60 @@ services:
       start_period: 40s
 
   # ============================================
+  # Order Service - NestJS 11
+  # ============================================
+  order-service:
+    build:
+      context: .
+      dockerfile: ./services/order-service/Dockerfile
+      target: production
+    container_name: emp-order-service
+    ports:
+      - "${ORDER_SERVICE_PORT:-8003}:8003"
+      - "9464:9464"
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgres://emp:emp@postgres-order:5432/emp_order
+      - REDIS_URL=redis://redis-master:6379
+      - RABBITMQ_URL=amqp://emp:emp@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      
+      # Application Configuration
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=8003
+      - SERVICE_NAME=order-service
+      
+      # JWT Configuration
+      - JWT_ALGORITHM=RS256
+      - JWT_ISSUER=${JWT_ISSUER:-http://localhost:8001}
+      - JWT_AUDIENCE=${JWT_PLATFORM_AUDIENCE:-emp-platform}
+      
+      # OpenTelemetry Configuration
+      - OTEL_SERVICE_NAME=order-service
+      - OTEL_SERVICE_VERSION=1.0.0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - METRICS_PORT=9464
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - emp-backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
   # Product Service - NestJS 11
   # ============================================
   product-service:

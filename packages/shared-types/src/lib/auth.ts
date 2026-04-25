@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const userRoleSchema = z.enum([
+// Legacy schemas - use roles.ts for the authoritative source
+export const legacyUserRoleSchema = z.enum([
   "super_admin",
   "admin",
   "finance_manager",
@@ -10,9 +11,9 @@ export const userRoleSchema = z.enum([
   "customer"
 ]);
 
-export type UserRole = z.infer<typeof userRoleSchema>;
+export type LegacyUserRole = z.infer<typeof legacyUserRoleSchema>;
 
-export const permissionSchema = z.enum([
+export const legacyPermissionSchema = z.enum([
   "products.read",
   "products.create",
   "products.update",
@@ -30,7 +31,7 @@ export const permissionSchema = z.enum([
   "system.config"
 ]);
 
-export type Permission = z.infer<typeof permissionSchema>;
+export type LegacyPermission = z.infer<typeof legacyPermissionSchema>;
 
 export const tokenTypeSchema = z.enum(["access", "refresh", "service"]);
 export type TokenType = z.infer<typeof tokenTypeSchema>;
@@ -43,10 +44,9 @@ export const jwtClaimsSchema = z.object({
   jti: z.string().min(1),
   iat: z.number().int().nonnegative(),
   exp: z.number().int().nonnegative(),
-  roles: z.array(userRoleSchema).default([]),
-  permissions: z.array(permissionSchema).default([]),
+  roles: z.array(legacyUserRoleSchema).default([]),
+  permissions: z.array(legacyPermissionSchema).default([]),
   scopes: z.array(z.string().min(1)).optional()
 });
 
 export type JwtClaims = z.infer<typeof jwtClaimsSchema>;
-

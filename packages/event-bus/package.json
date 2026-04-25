@@ -18,6 +18,9 @@
     "@emp/shared-types": "workspace:*",
     "@emp/utils": "workspace:*",
     "amqplib": "^0.10.5"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.5",
+    "typescript": "^5.9.3"
   }
 }
-

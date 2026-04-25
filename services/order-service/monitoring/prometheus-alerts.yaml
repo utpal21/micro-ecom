@@ -1,0 +1,220 @@
+groups:
+  - name: order-service-alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: OrderServiceHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="order-service",status=~"5.."}[5m])) 
+            / 
+            sum(rate(http_requests_total{service="order-service"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "High error rate in Order Service"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes (threshold: 5%)"
+
+      # High Latency Alert
+      - alert: OrderServiceHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{service="order-service"}[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "High latency in Order Service"
+          description: "P95 latency is {{ $value | humanizeDuration }} for the last 5 minutes (threshold: 1s)"
+
+      # Critical Latency Alert
+      - alert: OrderServiceCriticalLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{service="order-service"}[5m])) by (le)
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Critical latency in Order Service"
+          description: "P95 latency is {{ $value | humanizeDuration }} for the last 2 minutes (threshold: 5s)"
+
+      # RabbitMQ DLQ Full Alert
+      - alert: OrderServiceRabbitMQDLQFull
+        expr: rabbitmq_queue_messages{queue="order.payment.events.dlq"} > 100
+        for: 10m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "RabbitMQ DLQ is filling up"
+          description: "{{ $value }} messages in DLQ (threshold: 100)"
+
+      # Database Connections Exhausted Alert
+      - alert: OrderServiceDatabaseConnectionsExhausted
+        expr: pg_stat_activity_count{datname="order_db"} > 90
+        for: 5m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Database connections exhausted"
+          description: "{{ $value }} active connections (threshold: 90)"
+
+      # High Memory Usage Alert
+      - alert: OrderServiceHighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{container="order-service"} 
+            / 
+            container_spec_memory_limit_bytes{container="order-service"}
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "High memory usage in Order Service"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # Critical Memory Usage Alert
+      - alert: OrderServiceCriticalMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{container="order-service"} 
+            / 
+            container_spec_memory_limit_bytes{container="order-service"}
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Critical memory usage in Order Service"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 95%)"
+
+      # High CPU Usage Alert
+      - alert: OrderServiceHighCPUUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{container="order-service"}[5m])) 
+            / 
+            sum(container_spec_cpu_quota{container="order-service"} / container_spec_cpu_period{container="order-service"})
+          ) > 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "High CPU usage in Order Service"
+          description: "CPU usage is {{ $value | humanizePercentage }} for the last 10 minutes (threshold: 70%)"
+
+      # Service Down Alert
+      - alert: OrderServiceDown
+        expr: up{job="order-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order Service is down"
+          description: "Order Service has been down for more than 1 minute"
+
+      # Service Not Ready Alert
+      - alert: OrderServiceNotReady
+        expr: |
+          sum(up{job="order-service"}) < 3
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Order Service replicas not ready"
+          description: "Only {{ $value }} replicas are ready (expected: 3)"
+
+      # Database Connection Pool Exhaustion Alert
+      - alert: OrderServiceDBPoolExhausted
+        expr: |
+          (
+            typeorm_active_connections{service="order-service"} 
+            / 
+            typeorm_total_connections{service="order-service"}
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connections in use (threshold: 90%)"
+
+      # Redis Connection Failed Alert
+      - alert: OrderServiceRedisConnectionFailed
+        expr: |
+          rate(redis_connection_errors_total{service="order-service"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Redis connection failures in Order Service"
+          description: "{{ $value }} connection errors per second for the last 5 minutes"
+
+      # RabbitMQ Connection Failed Alert
+      - alert: OrderServiceRabbitMQConnectionFailed
+        expr: |
+          rate(rabbitmq_connection_errors_total{service="order-service"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "RabbitMQ connection failures in Order Service"
+          description: "{{ $value }} connection errors per second for the last 5 minutes"
+
+      # Order Creation Rate Drop Alert
+      - alert: OrderServiceOrderCreationRateDrop
+        expr: |
+          (
+            rate(order_created_total{service="order-service"}[5m]) 
+            < 
+            rate(order_created_total{service="order-service"}[1h] offset 5m) * 0.5
+          )
+        for: 10m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Order creation rate dropped significantly"
+          description: "Current rate is {{ $value | humanize }}/s, which is less than 50% of the 1-hour average"
+
+      # Message Processing Lag Alert
+      - alert: OrderServiceMessageProcessingLag
+        expr: |
+          rabbitmq_queue_messages{queue="order.payment.events"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "RabbitMQ message processing lag detected"
+          description: "{{ $value }} messages waiting to be processed (threshold: 1000)"
+
+      # Pod Restarts Alert
+      - alert: OrderServicePodRestarts
+        expr: |
+          increase(kube_pod_container_status_restarts_total{container="order-service"}[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Order Service pods restarting frequently"
+          description: "{{ $value }} restarts in the last hour"

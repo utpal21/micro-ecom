@@ -1,6 +1,6 @@
 # Enterprise Marketplace Platform (EMP) - Architectural Updates Summary
 
-> **Date:** April 22, 2026
+> **Date:** April 22, 2026 (Updated: April 23, 2026)
 > **Reviewer:** Senior System Architect
 > **Purpose:** Document critical architectural decisions and corrections based on senior system architect review
 
@@ -270,6 +270,223 @@ Cross-service joins (e.g., Order Service snapshotting product prices at order ti
 | **Unbalanced ledger entries** | DB trigger enforces debit=credit; Prometheus alert on trigger fire | ✅ Documented |
 | **Secret leak via logs** | Centralized log redaction in logger utility | ✅ Documented |
 | **DLQ silently growing** | Prometheus counter + Grafana alert on DLQ depth > 0 | ✅ Documented |
+
+---
+
+### 6. Additional Architectural Findings (April 23, 2026 Update)
+
+Based on the comprehensive Staff Architect Review, the following additional architectural enhancements and corrections have been identified:
+
+#### 6.1 New Services Added
+
+**Search/Catalog Service (NEW)**
+- **Technology:** NestJS 11 + Elasticsearch
+- **Port:** 8009
+- **Rationale:** Search deserves its own dedicated service for product discovery, autocomplete, and faceted filters
+- **Consumption:** Used by both customer-facing frontend and admin dashboard
+- **Status:** First-class service, not embedded in Admin Service
+
+**Vendor Service (NEW)**
+- **Technology:** NestJS 11 + PostgreSQL (via PgBouncer)
+- **Port:** 8010
+- **Rationale:** Dedicated vendor management for multi-vendor marketplace
+- **Features:** Vendor onboarding, performance metrics, settlement tracking
+- **Integration:** Event-driven with product, order, and payment services
+
+#### 6.2 API Gateway Evolution Plan
+
+**Current:** Nginx with basic routing and rate limiting
+**Future:** Migration to Kong or Traefik for production-grade gateway capabilities
+
+**Required Gateway Enhancements:**
+1. **Request Authentication at Gateway Level:** Lightweight JWT pre-check before routing to services
+2. **User-Level Rate Limiting:** Beyond IP-based limiting, implement per-user rate limiting
+3. **Gateway-Level Metrics:** Unified metrics collection before routing to services
+4. **Service Discovery:** Automatic service discovery and load balancing
+5. **API Versioning:** Built-in API version routing
+
+**Benefits:**
+- Malformed tokens never reach backend services
+- Reduced duplicate JWT validation across services
+- Unified observability at the edge
+- Easier A/B testing and canary deployments
+
+#### 6.3 Shared Packages Enhancements
+
+**packages/http-client (NEW)**
+- Axios wrapper with automatic X-Request-ID and X-Trace-ID propagation
+- Circuit breaker logic using opossum library
+- Retry with exponential backoff
+- Timeout handling
+- Unified error handling
+
+**packages/shared-types Enhancements**
+- Branded `Paisa` type: `type Paisa = number & { readonly brand: 'Paisa' }`
+- Role/Permission enums moved from README to TypeScript
+- Zod schemas for all event payloads with schema_version enforcement
+- Error code constants (VALIDATION_ERROR, UNAUTHORIZED, etc.)
+
+**packages/event-bus Enhancements**
+- Transactional outbox implementation
+- Built-in idempotency store decorator
+- Schema validation on incoming events
+- DLQ routing with exponential backoff retry
+
+**packages/logger Enhancements**
+- Automatic redaction of sensitive fields (password, token, secret, cvv, pin)
+- Structured JSON output with trace/span/request-id fields
+- Log level filtering per service
+- Centralized log format enforcement
+
+**packages/testing (NEW)**
+- Shared test utilities
+- Testcontainers setup for Postgres/MongoDB/Redis/RabbitMQ
+- Mock factories for common domain objects
+- Shared test fixtures
+
+#### 6.4 Security Hardening Requirements
+
+**Secrets Management**
+- Implement HashiCorp Vault or AWS Secrets Manager
+- All service secrets rotatable without deployment
+- Document secret rotation procedure
+- Phase 14 (Deployment Readiness) must include this
+
+**User-Level Rate Limiting**
+- Redis-based rate limiting at service level for authenticated endpoints
+- Key pattern: `ratelimit:{userId}:{endpoint}`
+- TTL: 60 seconds rolling window
+- Reject with 429 if limit exceeded
+
+**Role/Permission Enforcement**
+- Move role/permission matrix from README to code
+- TypeScript enum + Zod schema in packages/shared-types
+- Single source of truth across all services
+
+**SQL Injection Prevention**
+- Prisma parameterizes queries by default
+- Lint rule to flag raw query usage ($queryRaw, $executeRaw)
+- Require comment justifying raw query usage
+
+#### 6.5 Observability Enhancements
+
+**Distributed Trace Context Propagation**
+- Every HTTP request gets X-Request-ID header at gateway
+- Every outbound HTTP call (Axios) forwards X-Request-ID and X-Trace-ID
+- OpenTelemetry spans propagate automatically
+
+**DLQ Alerting**
+- Grafana alert: `rabbitmq_queue_messages{queue=~"*.dlq"} > 0` for 5 minutes
+- Page on critical alerts
+- Silent DLQ growth = silent data loss event
+
+**Structured Log Redaction**
+- Centralized redaction in packages/logger
+- Redact: JWT tokens, passwords, credit card fields
+- Redact any field named: secret, key, token, cvv, pin, val_id, store_passwd, tran_id
+
+**Database Read Replicas**
+- Add read replica to postgres-order for Phase 6+
+- Order history queries, admin order lists, analytics hit replica
+- Primary for writes only
+
+**Redis Sentinel Configuration**
+- Replace single Redis instance with Redis Sentinel
+- Configured from day one for failover testing
+- Document in docker-compose.prod.yml
+
+#### 6.6 Critical Prerequisites for Phase 6+
+
+The following foundation work MUST be completed before starting Phase 6 (Order Service):
+
+**Priority 1: Transactional Outbox Pattern**
+- Implement in packages/event-bus
+- Every event publisher writes to outbox table in same DB transaction
+- Background OutboxProcessor polls every 1s for PENDING events
+- Guarantees at-least-once delivery even if RabbitMQ is down
+
+**Priority 2: PgBouncer Configuration**
+- Add PgBouncer sidecars to all PostgreSQL services
+- Connection math documented: 20 instances × 5 services × 5 connections = 500 connections
+- PgBouncer multiplexes to 20 server-side Postgres connections
+- Prometheus alert: `pgbouncer_pool_mode_clients_waiting > 0` for > 30 seconds
+
+**Priority 3: Admin Service Split**
+- Admin API Service (NestJS 11) - Port 8007
+- Admin Frontend (Next.js/Vite SPA) - Port 8008
+- Independent deployability and scaling
+
+**Priority 4: Circuit Breaker Configuration**
+- Implement in packages/http-client using opossum
+- Policy per dependency type defined
+- Graceful degradation on service failures
+
+**Priority 5: Redis Key Registry**
+- Document ALL Redis keys with TTL, owner, invalidation logic
+- Prevent key collisions between services
+- packages/shared-types/src/redis-keys.ts
+
+**Priority 6: Role/Permission Code Enforcement**
+- Move from README to TypeScript enum + Zod schema
+- Single source of truth across all services
+- packages/shared-types/src/permissions.ts
+
+**Priority 7: User-Level Rate Limiting**
+- Redis-based rate limiting at service level
+- Key: ratelimit:{userId}:{endpoint}
+- Reject with 429 if limit exceeded
+
+**Priority 8: Distributed Trace Propagation**
+- X-Request-ID header at gateway
+- Automatic forwarding in all outbound HTTP calls
+- OpenTelemetry spans propagate automatically
+
+**Priority 9: DLQ Alerting**
+- Grafana alert configured
+- Page on critical alerts
+- Silent DLQ growth detection
+
+**Priority 10: Log Redaction**
+- Implemented in packages/logger
+- Centralized redaction of sensitive fields
+- Enforced across all services
+
+#### 6.7 Updated Phase Sequence
+
+**Old Sequence (12 Phases):**
+1. Project Initialization
+2. Shared Packages
+3. Auth Service
+4. Product Service
+5. Inventory Service
+6. Order Service
+7. Payment Service
+8. Notification Service
+9. Admin Service
+10. API Gateway
+11. Frontend Integration
+12. Deployment Readiness
+
+**New Sequence (14 Phases):**
+1. Project Initialization & Monorepo Setup
+2. Shared Packages & Core Infrastructure
+3. Auth Service
+4. Product Service
+5. Inventory Service
+6. **[BLOCKED] Order Service** - Requires prerequisites
+7. **[BLOCKED] Payment Service** - Requires prerequisites
+8. Notification Service
+9. Admin API Service (NEW - split from Admin)
+10. Search/Catalog Service (NEW)
+11. Admin Frontend (NEW - split from Admin)
+12. API Gateway & Security Hardening
+13. Frontend Integration
+14. Deployment Readiness & Observability
+
+**Status:**
+- Phases 1-5: ✅ COMPLETE
+- Phases 6-7: ⏸️ BLOCKED (awaiting prerequisites)
+- Phases 8-14: ⏳ NOT STARTED
 
 ---
 
