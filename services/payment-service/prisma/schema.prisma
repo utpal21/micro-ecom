@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Account - Represents financial accounts (Customer, Merchant, System, etc.)
+model Account {
+  id             String   @id @default(uuid())
+  accountType    String   // CUSTOMER, MERCHANT, SYSTEM, ESCROW
+  ownerId        String?  // User or Merchant ID
+  balance        Decimal  @db.Decimal(19, 4) @default(0)
+  currency       String   @default("BDT")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ledgerEntries    LedgerEntry[]
+  fromTransactions Transaction[] @relation("TransactionFromAccount")
+  toTransactions   Transaction[] @relation("TransactionToAccount")
+
+  @@unique([accountType, ownerId])
+  @@index([accountType])
+  @@index([ownerId])
+  @@map("accounts")
+}
+
+// Payment - Main payment record
+model Payment {
+  id              String        @id @default(uuid())
+  orderId         String
+  userId          String
+  amount          Decimal       @db.Decimal(19, 4)
+  currency        String        @default("BDT")
+  status          PaymentStatus @default(PENDING)
+  gatewayProvider String        // SSLCOMMERZ, STRIPE, etc.
+  gatewayRef      String?       // Reference from payment gateway
+  gatewayResponse Json?
+  idempotencyKey String        @unique
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  completedAt     DateTime?
+
+  transactions Transaction[]
+  gatewayLogs  GatewayLog[]
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([idempotencyKey])
+  @@index([gatewayRef])
+  @@map("payments")
+}
+
+// Transaction - Financial transaction (atomic unit)
+model Transaction {
+  id             String        @id @default(uuid())
+  paymentId      String
+  amount         Decimal       @db.Decimal(19, 4)
+  currency       String        @default("BDT")
+  status         TransactionStatus @default(PENDING)
+  description    String
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  payment      Payment        @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+  fromAccount  Account        @relation("TransactionFromAccount", fields: [fromAccountId], references: [id])
+  toAccount    Account        @relation("TransactionToAccount", fields: [toAccountId], references: [id])
+  fromAccountId String
+  toAccountId   String
+
+  @@index([paymentId])
+  @@index([status])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@map("transactions")
+}
+
+// LedgerEntry - Double-entry accounting entry (immutable)
+model LedgerEntry {
+  id            String        @id @default(uuid())
+  transactionId String
+  accountId     String
+  amount        Decimal       @db.Decimal(19, 4)
+  currency      String        @default("BDT")
+  entryType     EntryType     // DEBIT or CREDIT
+  balanceAfter  Decimal       @db.Decimal(19, 4)
+  description   String
+  createdAt     DateTime      @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     Account     @relation(fields: [accountId], references: [id])
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@index([entryType])
+  @@index([createdAt])
+  @@map("ledger_entries")
+}
+
+// PaymentMethod - Payment methods for users
+model PaymentMethod {
+  id           String          @id @default(uuid())
+  userId       String
+  type         PaymentMethodType
+  provider     String          // SSLCOMMERZ, STRIPE, etc.
+  providerData Json?           // Encrypted payment method details
+  isDefault    Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@map("payment_methods")
+}
+
+// GatewayLog - Payment gateway interaction logs
+model GatewayLog {
+  id          String       @id @default(uuid())
+  paymentId   String
+  gateway     String
+  action      String       // INITIATE, VALIDATE, CALLBACK, etc.
+  request     Json
+  response    Json?
+  status      GatewayLogStatus
+  statusCode  Int?
+  durationMs  Int?
+  error       String?
+  createdAt   DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([gateway])
+  @@index([action])
+  @@index([status])
+  @@index([createdAt])
+  @@map("gateway_logs")
+}
+
+// Enums
+enum PaymentStatus {
+  PENDING
+  INITIATED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
+enum PaymentMethodType {
+  CARD
+  BANK_TRANSFER
+  MOBILE_BANKING
+  WALLET
+  OTHER
+}
+
+enum GatewayLogStatus {
+  SUCCESS
+  FAILED
+  TIMEOUT
+  ERROR
+}

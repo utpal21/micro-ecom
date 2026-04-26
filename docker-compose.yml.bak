@@ -312,7 +312,6 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-http://localhost:8001}
       - JWT_AUDIENCE=${JWT_PLATFORM_AUDIENCE:-emp-platform}
       - JWT_PUBLIC_KEY_PATH=/app/config/jwt/public.pem
-      - JWKS_URL=http://auth-service:8001/api/.well-known/jwks.json
       
       # SSLCommerz Configuration
       - SSLCOMMERZ_STORE_ID=${SSLCOMMERZ_STORE_ID:-test_id}
@@ -339,7 +338,7 @@ services:
       - emp-backend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health/liveness"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -349,6 +348,7 @@ services:
   # RabbitMQ Message Broker
   # ============================================
   rabbitmq:
+  +++++++ REPLACE
     image: rabbitmq:3.13-management
     container_name: emp-rabbitmq
     hostname: rabbitmq
