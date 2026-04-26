@@ -1,291 +1,175 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { OrderService } from '../src/modules/orders/application/order.service';
-import { OrderRepository } from '../src/modules/orders/infrastructure/repositories/order.repository';
-import { OrderStatus } from '../src/modules/orders/infrastructure/entities/order.entity';
-import { ConflictException, NotFoundException } from '@nestjs/common';
-import { IdempotencyMiddleware } from '../src/middleware/idempotency.middleware';
-import Redis from 'ioredis';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { OrderService } from '../../src/modules/orders/application/order.service';
+import { OrderStateMachine, InvalidOrderTransitionException } from '../../src/modules/orders/domain/order-state-machine';
+import { PaymentMethod, OrderStatus, type Order } from '../../src/modules/orders/infrastructure/entities/order.entity';
+import { OrderRepository } from '../../src/modules/orders/infrastructure/repositories/order.repository';
+
+const createRepositoryMock = () => ({
+    createOrder: vi.fn(),
+    findByIdWithItems: vi.fn(),
+    findByUserId: vi.fn(),
+    updateOrderStatus: vi.fn(),
+});
 
 describe('OrderService', () => {
+    let repository: ReturnType<typeof createRepositoryMock>;
+    let stateMachine: OrderStateMachine;
     let service: OrderService;
-    let repository: jest.Mocked<OrderRepository>;
-    let redis: jest.Mocked<Redis>;
-    let configService: jest.Mocked<ConfigService>;
 
-    const mockOrder = {
-        id: 'order-123',
-        userId: 'user-123',
-        totalAmountPaisa: 10000,
+    const baseOrder: Order = {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        userId: '550e8400-e29b-41d4-a716-446655440001',
         status: OrderStatus.PENDING,
-        items: [
-            {
-                id: 'item-1',
-                orderId: 'order-123',
-                productId: 'prod-1',
-                quantity: 2,
-                unitPricePaisa: 5000,
-                totalPricePaisa: 10000,
-            },
-        ],
+        paymentMethod: PaymentMethod.SSLCOMMERZ,
+        currency: 'BDT',
+        totalAmountPaisa: 20000,
+        idempotencyKey: 'idem-1',
         createdAt: new Date(),
         updatedAt: new Date(),
+        items: [],
     };
 
-    beforeEach(async () => {
-        const mockRepository = {
-            create: jest.fn(),
-            findById: jest.fn(),
-            findByUserId: jest.fn(),
-            updateStatus: jest.fn(),
-            addOrderItem: jest.fn(),
-            getPendingOutboxEvents: jest.fn(),
-            markOutboxEventPublished: jest.fn(),
-            markOutboxEventFailed: jest.fn(),
-        };
-
-        const mockRedis = {
-            get: jest.fn(),
-            setex: jest.fn(),
-            ping: jest.fn().mockResolvedValue('PONG'),
-        };
-
-        const mockConfigService = {
-            get: jest.fn().mockReturnValue('test-value'),
-        };
-
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                OrderService,
-                {
-                    provide: OrderRepository,
-                    useValue: mockRepository,
-                },
-                {
-                    provide: 'REDIS_CLIENT',
-                    useValue: mockRedis,
-                },
-                {
-                    provide: ConfigService,
-                    useValue: mockConfigService,
-                },
-            ],
-        }).compile();
-
-        service = module.get<OrderService>(OrderService);
-        repository = module.get(OrderRepository);
-        redis = module.get('REDIS_CLIENT');
-        configService = module.get(ConfigService);
+    beforeEach(() => {
+        repository = createRepositoryMock();
+        stateMachine = new OrderStateMachine();
+        service = new OrderService(repository as unknown as OrderRepository, stateMachine);
     });
 
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
+    it('creates an order and writes the outbox payload in the same repository call', async () => {
+        repository.createOrder.mockResolvedValue({
+            order: baseOrder,
+            items: [],
+        });
 
-    describe('createOrder', () => {
-        const createOrderDto = {
-            userId: 'user-123',
+        const result = await service.createOrder({
+            userId: baseOrder.userId,
+            paymentMethod: PaymentMethod.SSLCOMMERZ,
             items: [
                 {
-                    productId: 'prod-1',
+                    sku: 'SKU-1',
+                    productId: '550e8400-e29b-41d4-a716-446655440002',
                     quantity: 2,
-                    unitPricePaisa: 5000,
+                    unitPricePaisa: 10000,
                 },
             ],
-        };
+        }, 'idem-1');
 
-        const idempotencyKey = 'test-key-123';
-        const cacheKey = `order:idempotency:${idempotencyKey}`;
-
-        it('should create a new order successfully', async () => {
-            // Setup mocks
-            redis.get.mockResolvedValue(null);
-            repository.create.mockResolvedValue(mockOrder as any);
-            redis.setex.mockResolvedValue('OK');
-
-            const result = await service.createOrder(createOrderDto, idempotencyKey);
-
-            expect(result).toEqual(mockOrder);
-            expect(redis.get).toHaveBeenCalledWith(cacheKey);
-            expect(repository.create).toHaveBeenCalledWith(createOrderDto);
-            expect(redis.setex).toHaveBeenCalled();
-        });
-
-        it('should return cached response for idempotent requests', async () => {
-            const cachedResponse = JSON.stringify(mockOrder);
-            redis.get.mockResolvedValue(cachedResponse);
-
-            const result = await service.createOrder(createOrderDto, idempotencyKey);
-
-            expect(result).toEqual(mockOrder);
-            expect(redis.get).toHaveBeenCalledWith(cacheKey);
-            expect(repository.create).not.toHaveBeenCalled();
-        });
-
-        it('should throw ConflictException if idempotency key is missing', async () => {
-            await expect(
-                service.createOrder(createOrderDto, '')
-            ).rejects.toThrow(ConflictException);
-        });
+        expect(result).toEqual(baseOrder);
+        expect(repository.createOrder).toHaveBeenCalledTimes(1);
+        expect(repository.createOrder).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: baseOrder.userId,
+                status: OrderStatus.PENDING,
+                paymentMethod: PaymentMethod.SSLCOMMERZ,
+                totalAmountPaisa: 20000,
+                idempotencyKey: 'idem-1',
+            }),
+            [
+                expect.objectContaining({
+                    sku: 'SKU-1',
+                    quantity: 2,
+                    lineTotalPaisa: 20000,
+                }),
+            ],
+            expect.objectContaining({
+                userId: baseOrder.userId,
+                totalAmountPaisa: 20000,
+            }),
+        );
     });
 
-    describe('getOrderById', () => {
-        it('should return order by id', async () => {
-            repository.findById.mockResolvedValue(mockOrder as any);
-
-            const result = await service.getOrderById('order-123');
-
-            expect(result).toEqual(mockOrder);
-            expect(repository.findById).toHaveBeenCalledWith('order-123');
-        });
-
-        it('should throw NotFoundException if order not found', async () => {
-            repository.findById.mockResolvedValue(null);
-
-            await expect(service.getOrderById('order-123')).rejects.toThrow(
-                NotFoundException
-            );
-        });
-    });
-
-    describe('getUserOrders', () => {
-        it('should return user orders', async () => {
-            const orders = [mockOrder];
-            repository.findByUserId.mockResolvedValue(orders as any);
-
-            const result = await service.getUserOrders('user-123');
-
-            expect(result).toEqual(orders);
-            expect(repository.findByUserId).toHaveBeenCalledWith('user-123');
-        });
-    });
-
-    describe('updateOrderStatus', () => {
-        it('should update order status successfully', async () => {
-            const updatedOrder = { ...mockOrder, status: OrderStatus.PAID };
-            repository.findById.mockResolvedValue(mockOrder as any);
-            repository.updateStatus.mockResolvedValue(updatedOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.PAID,
-                reason: 'Payment completed',
-            });
-
-            expect(result.status).toBe(OrderStatus.PAID);
-            expect(repository.updateStatus).toHaveBeenCalledWith(
-                'order-123',
-                OrderStatus.PAID,
-                'Payment completed'
-            );
-        });
-
-        it('should throw NotFoundException if order not found', async () => {
-            repository.findById.mockResolvedValue(null);
-
-            await expect(
-                service.updateOrderStatus('order-123', {
-                    status: OrderStatus.PAID,
-                    reason: 'Payment completed',
-                })
-            ).rejects.toThrow(NotFoundException);
-        });
-    });
-
-    describe('Order Status Transitions', () => {
-        it('should allow transition from PENDING to PAID', async () => {
-            const updatedOrder = { ...mockOrder, status: OrderStatus.PAID };
-            repository.findById.mockResolvedValue(mockOrder as any);
-            repository.updateStatus.mockResolvedValue(updatedOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.PAID,
-            });
-
-            expect(result.status).toBe(OrderStatus.PAID);
-        });
-
-        it('should allow transition from PAID to PROCESSING', async () => {
-            const paidOrder = { ...mockOrder, status: OrderStatus.PAID };
-            const processingOrder = { ...mockOrder, status: OrderStatus.PROCESSING };
-            repository.findById.mockResolvedValue(paidOrder as any);
-            repository.updateStatus.mockResolvedValue(processingOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.PROCESSING,
-            });
-
-            expect(result.status).toBe(OrderStatus.PROCESSING);
-        });
-
-        it('should allow transition from PROCESSING to SHIPPED', async () => {
-            const processingOrder = { ...mockOrder, status: OrderStatus.PROCESSING };
-            const shippedOrder = { ...mockOrder, status: OrderStatus.SHIPPED };
-            repository.findById.mockResolvedValue(processingOrder as any);
-            repository.updateStatus.mockResolvedValue(shippedOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.SHIPPED,
-            });
-
-            expect(result.status).toBe(OrderStatus.SHIPPED);
-        });
-
-        it('should allow transition from SHIPPED to DELIVERED', async () => {
-            const shippedOrder = { ...mockOrder, status: OrderStatus.SHIPPED };
-            const deliveredOrder = { ...mockOrder, status: OrderStatus.DELIVERED };
-            repository.findById.mockResolvedValue(shippedOrder as any);
-            repository.updateStatus.mockResolvedValue(deliveredOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.DELIVERED,
-            });
-
-            expect(result.status).toBe(OrderStatus.DELIVERED);
-        });
-
-        it('should allow transition from any status to CANCELLED', async () => {
-            const cancelledOrder = { ...mockOrder, status: OrderStatus.CANCELLED };
-            repository.findById.mockResolvedValue(mockOrder as any);
-            repository.updateStatus.mockResolvedValue(cancelledOrder as any);
-
-            const result = await service.updateOrderStatus('order-123', {
-                status: OrderStatus.CANCELLED,
-                reason: 'Customer requested cancellation',
-            });
-
-            expect(result.status).toBe(OrderStatus.CANCELLED);
-        });
-    });
-
-    describe('Error Handling', () => {
-        it('should handle Redis errors gracefully', async () => {
-            redis.get.mockRejectedValue(new Error('Redis connection failed'));
-
-            const result = await service.createOrder(
+    it('rejects empty idempotency keys', async () => {
+        await expect(service.createOrder({
+            userId: baseOrder.userId,
+            paymentMethod: PaymentMethod.COD,
+            items: [
                 {
-                    userId: 'user-123',
-                    items: [{ productId: 'prod-1', quantity: 1, unitPricePaisa: 1000 }],
+                    sku: 'SKU-1',
+                    productId: '550e8400-e29b-41d4-a716-446655440002',
+                    quantity: 1,
+                    unitPricePaisa: 1000,
                 },
-                'test-key'
-            );
+            ],
+        }, '   ')).rejects.toBeInstanceOf(BadRequestException);
+    });
 
-            // Should proceed without idempotency check
-            expect(result).toBeDefined();
+    it('returns a single order by id', async () => {
+        repository.findByIdWithItems.mockResolvedValue(baseOrder);
+
+        await expect(service.getOrderById(baseOrder.id)).resolves.toEqual(baseOrder);
+        expect(repository.findByIdWithItems).toHaveBeenCalledWith(baseOrder.id);
+    });
+
+    it('throws when the order is missing', async () => {
+        repository.findByIdWithItems.mockResolvedValue(null);
+
+        await expect(service.getOrderById(baseOrder.id)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('updates order status and persists an outbox event for non-cancel transitions', async () => {
+        const paidOrder = { ...baseOrder, status: OrderStatus.PAID };
+        repository.findByIdWithItems.mockResolvedValue(baseOrder);
+        repository.updateOrderStatus.mockResolvedValue(paidOrder);
+
+        const result = await service.updateOrderStatus(baseOrder.id, {
+            status: OrderStatus.CONFIRMED,
+            reason: 'Payment authorization accepted',
+        }, '550e8400-e29b-41d4-a716-446655440099');
+
+        expect(result).toEqual(paidOrder);
+        expect(repository.updateOrderStatus).toHaveBeenCalledWith(
+            baseOrder.id,
+            OrderStatus.CONFIRMED,
+            '550e8400-e29b-41d4-a716-446655440099',
+            'Payment authorization accepted',
+            {
+                eventType: 'order.status.updated',
+                payload: {
+                    orderId: baseOrder.id,
+                    userId: baseOrder.userId,
+                    oldStatus: OrderStatus.PENDING,
+                    newStatus: OrderStatus.CONFIRMED,
+                    reason: 'Payment authorization accepted',
+                },
+            },
+        );
+    });
+
+    it('writes a cancellation outbox event for cancelled orders', async () => {
+        const cancelledOrder = { ...baseOrder, status: OrderStatus.CANCELLED };
+        repository.findByIdWithItems.mockResolvedValue(baseOrder);
+        repository.updateOrderStatus.mockResolvedValue(cancelledOrder);
+
+        await service.updateOrderStatus(baseOrder.id, {
+            status: OrderStatus.CANCELLED,
+            reason: 'Customer requested cancellation',
         });
 
-        it('should handle repository errors', async () => {
-            redis.get.mockResolvedValue(null);
-            repository.create.mockRejectedValue(new Error('Database error'));
+        expect(repository.updateOrderStatus).toHaveBeenCalledWith(
+            baseOrder.id,
+            OrderStatus.CANCELLED,
+            undefined,
+            'Customer requested cancellation',
+            {
+                eventType: 'order.cancelled',
+                payload: {
+                    orderId: baseOrder.id,
+                    userId: baseOrder.userId,
+                    reason: 'Customer requested cancellation',
+                },
+            },
+        );
+    });
 
-            await expect(
-                service.createOrder(
-                    {
-                        userId: 'user-123',
-                        items: [{ productId: 'prod-1', quantity: 1, unitPricePaisa: 1000 }],
-                    },
-                    'test-key'
-                )
-            ).rejects.toThrow('Database error');
+    it('rejects invalid state transitions', async () => {
+        repository.findByIdWithItems.mockResolvedValue(baseOrder);
+        vi.spyOn(stateMachine, 'transition').mockImplementation(() => {
+            throw new InvalidOrderTransitionException(OrderStatus.PENDING, OrderStatus.SHIPPED);
         });
+
+        await expect(service.updateOrderStatus(baseOrder.id, {
+            status: OrderStatus.SHIPPED,
+        })).rejects.toBeInstanceOf(BadRequestException);
     });
 });

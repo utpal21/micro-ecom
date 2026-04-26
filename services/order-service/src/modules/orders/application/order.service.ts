@@ -21,6 +21,10 @@ export class OrderService {
      * Create a new order with items and publish order.created event
      */
     async createOrder(dto: CreateOrderDto, idempotencyKey: string): Promise<Order> {
+        if (!idempotencyKey.trim()) {
+            throw new BadRequestException('Idempotency-Key header is required');
+        }
+
         // Calculate total amount
         const totalAmountPaisa = dto.items.reduce(
             (sum, item) => sum + item.unitPricePaisa * item.quantity,
@@ -53,17 +57,20 @@ export class OrderService {
             lineTotalPaisa: item.unitPricePaisa * item.quantity,
         }));
 
-        // Create order in database
-        const order = await this.orderRepository.createOrder(orderData, orderItems);
-
-        // Publish order.created event via outbox
-        await this.orderRepository.saveOutboxEvent('order.created', {
-            orderId: order.id,
-            userId: order.userId,
-            totalAmountPaisa: order.totalAmountPaisa,
-            paymentMethod: order.paymentMethod,
+        const outboxPayload = {
+            orderId: orderData.id,
+            userId: dto.userId,
+            totalAmountPaisa,
+            paymentMethod: orderData.paymentMethod,
             items: orderItems,
-        });
+        };
+
+        const { order, items } = await this.orderRepository.createOrder(
+            orderData,
+            orderItems,
+            outboxPayload,
+        );
+        order.items = items;
 
         this.logger.info('Order created successfully', {
             orderId: order.id,
@@ -116,27 +123,38 @@ export class OrderService {
             throw error;
         }
 
-        // Update status
+        const outboxEvent = dto.status === OrderStatus.CANCELLED
+            ? {
+                eventType: 'order.cancelled',
+                payload: {
+                    orderId: order.id,
+                    userId: order.userId,
+                    reason: dto.reason || 'Order cancelled',
+                },
+            }
+            : {
+                eventType: 'order.status.updated',
+                payload: {
+                    orderId: order.id,
+                    userId: order.userId,
+                    oldStatus: order.status,
+                    newStatus: dto.status,
+                    reason: dto.reason,
+                },
+            };
+
         const updatedOrder = await this.orderRepository.updateOrderStatus(
             id,
             dto.status,
             changedByUserId,
             dto.reason,
+            outboxEvent,
         );
 
-        // Publish event based on status change
         if (dto.status === OrderStatus.CANCELLED) {
-            await this.orderRepository.saveOutboxEvent('order.cancelled', {
+            this.logger.info('Order cancelled', {
                 orderId: order.id,
                 userId: order.userId,
-                reason: dto.reason || 'Order cancelled',
-            });
-        } else {
-            await this.orderRepository.saveOutboxEvent('order.status.updated', {
-                orderId: order.id,
-                userId: order.userId,
-                oldStatus: order.status,
-                newStatus: dto.status,
                 reason: dto.reason,
             });
         }

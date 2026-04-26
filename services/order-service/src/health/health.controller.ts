@@ -20,7 +20,7 @@ export class HealthController {
     @HealthCheck()
     liveness() {
         return this.health.check([
-            async () => ({ status: 'up' }),
+            async () => ({ orderService: { status: 'up' } }),
         ]);
     }
 

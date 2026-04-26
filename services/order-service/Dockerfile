@@ -1,10 +1,10 @@
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install pnpm (version compatible with lockfile v6.0)
-RUN npm install -g pnpm@8.15.0
+# Install pnpm matching the workspace lockfile
+RUN npm install -g pnpm@10.8.0
 
 # Copy monorepo root files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
@@ -30,7 +30,7 @@ COPY services/order-service/nest-cli.json ./
 RUN pnpm build
 
 # Stage 2: Production
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
 # Install dumb-init and wget for health check
 RUN apk add --no-cache dumb-init wget
@@ -46,8 +46,8 @@ COPY services/order-service/package.json ./
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages ./packages
 
-# Install pnpm (version compatible with lockfile v6.0)
-RUN npm install -g pnpm@8.15.0
+# Install pnpm matching the workspace lockfile
+RUN npm install -g pnpm@10.8.0
 
 # Install production dependencies only
 RUN pnpm install --prod

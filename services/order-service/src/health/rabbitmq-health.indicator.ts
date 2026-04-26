@@ -5,11 +5,8 @@ import amqp from 'amqplib';
 
 @Injectable()
 export class RabbitMQHealthIndicator extends HealthIndicator {
-    private url: string;
-
-    constructor(private configService: ConfigService) {
+    constructor(private readonly configService: ConfigService) {
         super();
-        this.url = this.configService.get<string>('RABBITMQ_URL');
     }
 
     /**
@@ -17,8 +14,10 @@ export class RabbitMQHealthIndicator extends HealthIndicator {
      */
     async isHealthy(key: string): Promise<HealthIndicatorResult> {
         try {
+            const url = this.configService.get<string>('RABBITMQ_URL')
+                ?? `amqp://${this.configService.get('RABBITMQ_USERNAME')}:${this.configService.get('RABBITMQ_PASSWORD')}@${this.configService.get('RABBITMQ_HOST')}:${this.configService.get('RABBITMQ_PORT')}`;
             const start = Date.now();
-            const connection = await amqp.connect(this.url);
+            const connection = await amqp.connect(url);
             await connection.close();
             const latency = Date.now() - start;
 

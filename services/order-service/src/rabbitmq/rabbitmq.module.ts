@@ -2,6 +2,10 @@ import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import amqp, { Channel, Connection } from 'amqplib';
 
+type RabbitConnection = Connection & {
+    createChannel(): Promise<Channel>;
+};
+
 @Global()
 @Module({
     imports: [ConfigModule],
@@ -9,7 +13,8 @@ import amqp, { Channel, Connection } from 'amqplib';
         {
             provide: 'RABBITMQ_CONNECTION',
             useFactory: async (configService: ConfigService) => {
-                const url = `amqp://${configService.get('RABBITMQ_USERNAME')}:${configService.get('RABBITMQ_PASSWORD')}@${configService.get('RABBITMQ_HOST')}:${configService.get('RABBITMQ_PORT')}`;
+                const configuredUrl = configService.get<string>('RABBITMQ_URL');
+                const url = configuredUrl ?? `amqp://${configService.get('RABBITMQ_USERNAME')}:${configService.get('RABBITMQ_PASSWORD')}@${configService.get('RABBITMQ_HOST')}:${configService.get('RABBITMQ_PORT')}`;
                 const connection = await amqp.connect(url);
                 return connection;
             },
@@ -18,22 +23,30 @@ import amqp, { Channel, Connection } from 'amqplib';
         {
             provide: 'RABBITMQ_CHANNEL',
             useFactory: async (connection: Connection, configService: ConfigService) => {
-                // @ts-ignore - amqplib type definitions issue
-                const channel = await connection.createChannel();
+                const channel = await (connection as RabbitConnection).createChannel();
 
-                // Declare exchanges and queues
-                const exchangeName = 'order.events';
-                await channel.assertExchange(exchangeName, 'topic', { durable: true });
+                const orderExchangeName = configService.get<string>('RABBITMQ_ORDER_EXCHANGE') ?? 'order.exchange';
+                const paymentExchangeName = configService.get<string>('RABBITMQ_PAYMENT_EXCHANGE') ?? 'payment.exchange';
+                const paymentQueue = configService.get<string>('RABBITMQ_PAYMENT_QUEUE') ?? 'order.payment.queue';
+                const paymentDlq = configService.get<string>('RABBITMQ_PAYMENT_DLQ') ?? 'order.payment.queue.dlq';
+                const orderQueue = configService.get<string>('RABBITMQ_ORDER_QUEUE') ?? 'order.events';
 
-                // Payment events queue
-                const paymentQueue = 'order.payment.events';
-                await channel.assertQueue(paymentQueue, { durable: true });
-                await channel.bindQueue(paymentQueue, exchangeName, 'payment.*');
+                await channel.assertExchange(orderExchangeName, 'topic', { durable: true });
+                await channel.assertExchange(paymentExchangeName, 'topic', { durable: true });
+                await channel.assertExchange(`${paymentExchangeName}.dlq`, 'topic', { durable: true });
 
-                // Order events queue (for other services)
-                const orderQueue = 'order.events';
+                await channel.assertQueue(paymentDlq, { durable: true });
+                await channel.bindQueue(paymentDlq, `${paymentExchangeName}.dlq`, 'payment.failed');
+
+                await channel.assertQueue(paymentQueue, {
+                    durable: true,
+                    deadLetterExchange: `${paymentExchangeName}.dlq`,
+                    deadLetterRoutingKey: 'payment.failed',
+                });
+                await channel.bindQueue(paymentQueue, paymentExchangeName, 'payment.*');
+
                 await channel.assertQueue(orderQueue, { durable: true });
-                await channel.bindQueue(orderQueue, exchangeName, 'order.*');
+                await channel.bindQueue(orderQueue, orderExchangeName, 'order.*');
 
                 return channel;
             },

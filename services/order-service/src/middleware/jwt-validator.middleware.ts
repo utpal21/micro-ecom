@@ -1,33 +1,16 @@
-import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import { Inject, Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/common';
+import { Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import LRUCache from 'lru-cache';
-import { createLogger, Logger } from '@emp/utils';
+import { LRUCache } from 'lru-cache';
+import { createLogger } from '@emp/utils';
 import * as jose from 'jose';
-
-interface JWTPayload {
-    sub: string;
-    roles?: string[];
-    permissions?: string[];
-    exp: number;
-    iat: number;
-    iss: string;
-    aud: string;
-}
-
-declare global {
-    namespace Express {
-        interface Request {
-            user?: JWTPayload;
-        }
-    }
-}
+import { AuthenticatedUser, OrderRequest } from '../types/request-context';
 
 @Injectable()
 export class JwtValidatorMiddleware implements NestMiddleware {
     private logger = createLogger('jwt-validator');
-    private jwksCache: LRUCache<string, jose.KeyLike>;
+    private jwksCache: LRUCache<string, jose.KeyLike | Uint8Array>;
     private keySet?: jose.JSONWebKeySet;
     private lastJwksFetch = 0;
     private readonly JWKS_CACHE_TTL = 3600000; // 1 hour
@@ -37,11 +20,12 @@ export class JwtValidatorMiddleware implements NestMiddleware {
 
     constructor(
         private configService: ConfigService,
+        @Inject('REDIS_CLIENT')
         private redis: Redis,
     ) {
-        this.JWKS_URL = `${this.configService.get('AUTH_SERVICE_URL')}/.well-known/jwks.json`;
-        this.JWT_ISSUER = this.configService.get('JWT_ISSUER');
-        this.JWT_AUDIENCE = this.configService.get('JWT_AUDIENCE');
+        this.JWKS_URL = `${this.configService.get<string>('AUTH_SERVICE_URL')}/api/.well-known/jwks.json`;
+        this.JWT_ISSUER = this.configService.get<string>('JWT_ISSUER') ?? '';
+        this.JWT_AUDIENCE = this.configService.get<string>('JWT_AUDIENCE') ?? '';
 
         // In-process LRU cache as fallback
         this.jwksCache = new LRUCache({
@@ -50,7 +34,7 @@ export class JwtValidatorMiddleware implements NestMiddleware {
         });
     }
 
-    async use(req: Request, res: Response, next: NextFunction) {
+    async use(req: OrderRequest, res: Response, next: NextFunction) {
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -65,10 +49,13 @@ export class JwtValidatorMiddleware implements NestMiddleware {
             req.user = payload;
             next();
         } catch (error) {
-            this.logger.error('JWT validation failed', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                token: token.substring(0, 20) + '...'
-            });
+            this.logger.error(
+                'JWT validation failed',
+                error instanceof Error ? error : undefined,
+                {
+                    token: token.substring(0, 20) + '...',
+                },
+            );
             throw new UnauthorizedException('Invalid or expired token');
         }
     }
@@ -76,7 +63,7 @@ export class JwtValidatorMiddleware implements NestMiddleware {
     /**
      * 8-Step Local JWKS Validation Flow
      */
-    private async validateToken(token: string): Promise<JWTPayload> {
+    private async validateToken(token: string): Promise<AuthenticatedUser> {
         // Step 1: Decode token header without verification to get kid
         const decodedHeader = jose.decodeProtectedHeader(token);
         const kid = decodedHeader.kid;
@@ -87,10 +74,10 @@ export class JwtValidatorMiddleware implements NestMiddleware {
 
         // Step 2: Try to get public key from Redis cache
         const cachedKey = await this.redis.get(`jwks:public_keys:${kid}`);
-        let publicKey: jose.KeyLike;
+        let publicKey: jose.KeyLike | Uint8Array;
 
         if (cachedKey) {
-            publicKey = JSON.parse(cachedKey) as jose.KeyLike;
+            publicKey = await jose.importJWK(JSON.parse(cachedKey) as jose.JWK, 'RS256');
         } else {
             // Step 3: Check in-process LRU cache as fallback
             const lruKey = this.jwksCache.get(kid);
@@ -106,12 +93,10 @@ export class JwtValidatorMiddleware implements NestMiddleware {
                     throw new Error(`Public key not found for kid: ${kid}`);
                 }
 
-                // Step 6: Import key
-                // @ts-ignore - jose.importJWK returns Uint8Array | KeyLike
                 publicKey = await jose.importJWK(key, 'RS256') as jose.KeyLike;
 
                 // Step 7: Cache in Redis and LRU
-                await this.redis.setex(`jwks:public_keys:${kid}`, 3600, JSON.stringify(publicKey));
+                await this.redis.setex(`jwks:public_keys:${kid}`, 3600, JSON.stringify(key));
                 this.jwksCache.set(kid, publicKey);
             }
         }
@@ -123,7 +108,7 @@ export class JwtValidatorMiddleware implements NestMiddleware {
             algorithms: ['RS256'],
         });
 
-        return payload as unknown as JWTPayload;
+        return payload as unknown as AuthenticatedUser;
     }
 
     /**
@@ -141,14 +126,14 @@ export class JwtValidatorMiddleware implements NestMiddleware {
                 throw new Error(`Failed to fetch JWKS: ${response.statusText}`);
             }
 
-            this.keySet = await response.json();
+            this.keySet = await response.json() as jose.JSONWebKeySet;
             this.lastJwksFetch = now;
             this.logger.info('JWKS fetched successfully from Auth Service');
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Failed to fetch JWKS', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Failed to fetch JWKS',
+                error instanceof Error ? error : undefined,
+            );
             throw new Error('Failed to fetch JWKS from Auth Service');
         }
     }

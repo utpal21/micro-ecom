@@ -18,39 +18,41 @@ export enum PaymentMethod {
 @Entity('orders')
 export class Order {
     @PrimaryGeneratedColumn('uuid')
-    id: string;
+    id!: string;
 
-    @Column({ type: 'uuid' })
-    userId: string;
+    @Column({ name: 'user_id', type: 'uuid' })
+    userId!: string;
 
     @Column({
+        name: 'status',
         type: 'enum',
         enum: OrderStatus,
         default: OrderStatus.PENDING,
     })
-    status: OrderStatus;
+    status!: OrderStatus;
 
     @Column({
+        name: 'payment_method',
         type: 'enum',
         enum: PaymentMethod,
     })
-    paymentMethod: PaymentMethod;
+    paymentMethod!: PaymentMethod;
 
-    @Column({ type: 'varchar', length: 3, default: 'BDT' })
-    currency: string;
+    @Column({ name: 'currency', type: 'varchar', length: 3, default: 'BDT' })
+    currency!: string;
 
-    @Column({ type: 'bigint' })
-    totalAmountPaisa: number;
+    @Column({ name: 'total_amount_paisa', type: 'bigint' })
+    totalAmountPaisa!: number;
 
-    @Column({ type: 'varchar', length: 255, unique: true })
-    idempotencyKey: string;
+    @Column({ name: 'idempotency_key', type: 'varchar', length: 255, unique: true })
+    idempotencyKey!: string;
 
-    @CreateDateColumn({ type: 'timestamptz' })
-    createdAt: Date;
+    @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+    createdAt!: Date;
 
-    @UpdateDateColumn({ type: 'timestamptz' })
-    updatedAt: Date;
+    @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+    updatedAt!: Date;
 
     @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
-    items: OrderItem[];
+    items!: OrderItem[];
 }

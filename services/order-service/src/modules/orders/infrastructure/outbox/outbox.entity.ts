@@ -9,30 +9,30 @@ export enum OutboxStatus {
 @Entity('outbox_events')
 export class OutboxEvent {
     @PrimaryGeneratedColumn('uuid')
-    id: string;
+    id!: string;
 
-    @Column({ type: 'varchar', length: 255 })
-    eventType: string;
+    @Column({ name: 'event_type', type: 'varchar', length: 255 })
+    eventType!: string;
 
-    @Column({ type: 'jsonb' })
-    payload: Record<string, unknown>;
+    @Column({ name: 'payload', type: 'jsonb' })
+    payload!: Record<string, unknown>;
 
     @Column({
         type: 'enum',
         enum: OutboxStatus,
         default: OutboxStatus.PENDING,
     })
-    status: OutboxStatus;
+    status!: OutboxStatus;
 
-    @Column({ type: 'int', default: 0 })
-    attempts: number;
+    @Column({ name: 'attempts', type: 'int', default: 0 })
+    attempts!: number;
 
-    @Column({ type: 'text', nullable: true })
-    lastError: string | null;
+    @Column({ name: 'last_error', type: 'text', nullable: true })
+    lastError!: string | null;
 
-    @CreateDateColumn({ type: 'timestamptz' })
-    createdAt: Date;
+    @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+    createdAt!: Date;
 
-    @Column({ type: 'timestamptz', nullable: true })
-    publishedAt: Date | null;
+    @Column({ name: 'published_at', type: 'timestamptz', nullable: true })
+    publishedAt!: Date | null;
 }

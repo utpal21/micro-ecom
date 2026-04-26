@@ -1,20 +1,19 @@
-import { Injectable, NestMiddleware, ConflictException } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, NestMiddleware, ConflictException } from '@nestjs/common';
+import { Response, NextFunction } from 'express';
 import Redis from 'ioredis';
 import { createLogger } from '@emp/utils';
+import { OrderRequest } from '../types/request-context';
 
 @Injectable()
 export class IdempotencyMiddleware implements NestMiddleware {
     private logger = createLogger('idempotency');
-    private readonly TTL = 86400; // 24 hours
 
     constructor(
-        private configService: ConfigService,
+        @Inject('REDIS_CLIENT')
         private redis: Redis,
     ) { }
 
-    async use(req: Request, res: Response, next: NextFunction) {
+    async use(req: OrderRequest, res: Response, next: NextFunction) {
         const idempotencyKey = req.headers['idempotency-key'];
 
         if (!idempotencyKey) {
@@ -37,16 +36,18 @@ export class IdempotencyMiddleware implements NestMiddleware {
                 return res.status(200).json(response);
             }
 
-            // Store the idempotency key in request for later use
-            (req as any).idempotencyKey = idempotencyKey;
-            (req as any).cacheKey = cacheKey;
+            req.idempotencyKey = String(idempotencyKey);
+            req.cacheKey = cacheKey;
 
             next();
         } catch (error) {
-            this.logger.error('Error checking idempotency', {
-                error: error instanceof Error ? error.message : 'Unknown error',
+            this.logger.error(
+                'Error checking idempotency',
+                error instanceof Error ? error : undefined,
+                {
                 key: idempotencyKey,
-            });
+                },
+            );
             // If Redis fails, proceed without idempotency (graceful degradation)
             next();
         }
@@ -58,16 +59,17 @@ export class IdempotencyMiddleware implements NestMiddleware {
     static async storeResponse(
         redis: Redis,
         cacheKey: string,
-        response: any,
+        response: unknown,
         ttl: number = 86400,
     ): Promise<void> {
         try {
             await redis.setex(cacheKey, ttl, JSON.stringify(response));
         } catch (error) {
             const logger = createLogger('idempotency');
-            logger.error('Failed to store idempotency response', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            logger.error(
+                'Failed to store idempotency response',
+                error instanceof Error ? error : undefined,
+            );
         }
     }
 }

@@ -1,11 +1,41 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { Inject } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import amqp, { Channel, ConsumeMessage } from 'amqplib';
 import { ConfigService } from '@nestjs/config';
 import { OrderService } from '../../modules/orders/application/order.service';
 import { OrderStatus } from '../../modules/orders/infrastructure/entities/order.entity';
 import { createLogger } from '@emp/utils';
 import Redis from 'ioredis';
+import { z } from 'zod';
+
+const paymentCompletedSchema = z.object({
+    orderId: z.string().uuid(),
+    paymentMethod: z.string().optional(),
+    method: z.string().optional(),
+    amountPaisa: z.number().int().nonnegative().optional(),
+    collectedAmountPaisa: z.number().int().nonnegative().optional(),
+    transactionId: z.string().optional(),
+});
+
+const paymentFailedSchema = z.object({
+    orderId: z.string().uuid(),
+    failureReason: z.string().optional(),
+    reason: z.string().optional(),
+    errorCode: z.string().optional(),
+});
+
+type PaymentCompletedPayload = z.infer<typeof paymentCompletedSchema>;
+type PaymentFailedPayload = z.infer<typeof paymentFailedSchema>;
+
+type PaymentEventEnvelope = {
+    eventType?: string;
+    payload?: unknown;
+    data?: unknown;
+    metadata?: {
+        eventId?: string;
+        eventName?: string;
+    };
+    timestamp?: string;
+};
 
 /**
  * Production-grade payment event consumer with idempotency and error handling
@@ -26,8 +56,8 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         private orderService: OrderService,
         private configService: ConfigService,
     ) {
-        this.queueName = this.configService.get('RABBITMQ_PAYMENT_QUEUE') || 'order.payment.events';
-        this.exchangeName = this.configService.get('RABBITMQ_EXCHANGE') || 'order.events';
+        this.queueName = this.configService.get<string>('RABBITMQ_PAYMENT_QUEUE') || 'order.payment.queue';
+        this.exchangeName = this.configService.get<string>('RABBITMQ_PAYMENT_EXCHANGE') || 'payment.exchange';
     }
 
     /**
@@ -45,15 +75,12 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
             // Set prefetch to 10 messages at a time
             await this.rabbitChannel.prefetch(10);
 
-            // @ts-ignore
             this.logger.info('Starting payment event consumer', {
                 queue: this.queueName,
                 exchange: this.exchangeName,
             });
 
-            // Start consuming
-            // @ts-ignore
-            this.consumerTag = await this.rabbitChannel.consume(
+            const { consumerTag } = await this.rabbitChannel.consume(
                 this.queueName,
                 async (msg: ConsumeMessage | null) => {
                     if (msg) {
@@ -64,17 +91,16 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
                     noAck: false, // Manual acknowledgment
                 },
             );
+            this.consumerTag = consumerTag;
 
-            // @ts-ignore
             this.logger.info('Payment event consumer started successfully', {
                 consumerTag: this.consumerTag,
             });
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Failed to start payment event consumer', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                stack: error instanceof Error ? error.stack : undefined,
-            });
+            this.logger.error(
+                'Failed to start payment event consumer',
+                error instanceof Error ? error : undefined,
+            );
             throw error;
         }
     }
@@ -94,11 +120,11 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         this.processingMessages.add(messageId);
 
         try {
-            // Parse message
-            const content = JSON.parse(msg.content.toString());
-            const { eventType, payload, timestamp } = content;
+            const content = JSON.parse(msg.content.toString()) as PaymentEventEnvelope;
+            const eventType = content.eventType ?? content.metadata?.eventName;
+            const payload = content.payload ?? content.data;
+            const timestamp = content.timestamp;
 
-            // @ts-ignore
             this.logger.info('Processing payment event', {
                 eventType,
                 messageId,
@@ -127,7 +153,6 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
                     break;
 
                 default:
-                    // @ts-ignore
                     this.logger.warn('Unknown payment event type', { eventType });
                     await this.nackMessage(msg, false); // Don't requeue unknown events
                     return;
@@ -139,22 +164,24 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
             // Acknowledge message
             await this.acknowledgeMessage(msg);
 
-            // @ts-ignore
             this.logger.info('Payment event processed successfully', {
                 eventType,
                 messageId,
             });
 
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Error processing payment event', {
-                messageId,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                stack: error instanceof Error ? error.stack : undefined,
-            });
+            this.logger.error(
+                'Error processing payment event',
+                error instanceof Error ? error : undefined,
+                { messageId },
+            );
 
-            // Negative acknowledge with requeue
-            await this.nackMessage(msg, true);
+            const shouldRequeue = !(
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException
+            );
+
+            await this.nackMessage(msg, shouldRequeue);
         } finally {
             this.processingMessages.delete(messageId);
         }
@@ -163,47 +190,41 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
     /**
      * Handle payment completed event
      */
-    private async handlePaymentCompleted(payload: any, messageId: string): Promise<void> {
-        const { orderId, paymentMethod, amountPaisa, transactionId } = payload;
+    private async handlePaymentCompleted(payload: unknown, messageId: string): Promise<void> {
+        const parsedPayload = paymentCompletedSchema.parse(payload) as PaymentCompletedPayload;
+        const { orderId, paymentMethod, method, amountPaisa, collectedAmountPaisa, transactionId } = parsedPayload;
 
-        if (!orderId) {
-            throw new Error('Missing orderId in payment completed event');
-        }
-
-        // @ts-ignore
         this.logger.info('Updating order to PAID', {
             orderId,
-            paymentMethod,
-            amountPaisa,
+            paymentMethod: paymentMethod ?? method,
+            amountPaisa: amountPaisa ?? collectedAmountPaisa,
             transactionId,
+            messageId,
         });
 
         await this.orderService.updateOrderStatus(orderId, {
             status: OrderStatus.PAID,
-            reason: `Payment completed via ${paymentMethod}`,
+            reason: `Payment completed via ${paymentMethod ?? method ?? 'unknown'}`,
         });
     }
 
     /**
      * Handle payment failed event
      */
-    private async handlePaymentFailed(payload: any, messageId: string): Promise<void> {
-        const { orderId, failureReason, errorCode } = payload;
+    private async handlePaymentFailed(payload: unknown, messageId: string): Promise<void> {
+        const parsedPayload = paymentFailedSchema.parse(payload) as PaymentFailedPayload;
+        const { orderId, failureReason, reason, errorCode } = parsedPayload;
 
-        if (!orderId) {
-            throw new Error('Missing orderId in payment failed event');
-        }
-
-        // @ts-ignore
         this.logger.warn('Cancelling order due to payment failure', {
             orderId,
-            failureReason,
+            failureReason: failureReason ?? reason,
             errorCode,
+            messageId,
         });
 
         await this.orderService.updateOrderStatus(orderId, {
             status: OrderStatus.CANCELLED,
-            reason: `Payment failed: ${failureReason || 'Unknown error'}`,
+            reason: `Payment failed: ${failureReason ?? reason ?? 'Unknown error'}`,
         });
     }
 
@@ -214,11 +235,11 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         try {
             this.rabbitChannel.ack(msg);
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Failed to acknowledge message', {
-                messageId: msg.properties.messageId,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Failed to acknowledge message',
+                error instanceof Error ? error : undefined,
+                { requestId: msg.properties.messageId },
+            );
         }
     }
 
@@ -229,12 +250,14 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         try {
             this.rabbitChannel.nack(msg, false, requeue);
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Failed to negative acknowledge message', {
-                messageId: msg.properties.messageId,
-                requeue,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Failed to negative acknowledge message',
+                error instanceof Error ? error : undefined,
+                {
+                    requestId: msg.properties.messageId,
+                    requeue,
+                },
+            );
         }
     }
 
@@ -242,7 +265,6 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
      * Graceful shutdown
      */
     async onModuleDestroy(): Promise<void> {
-        // @ts-ignore
         this.logger.info('Shutting down payment event consumer');
 
         // Wait for in-flight messages to finish
@@ -254,7 +276,6 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (this.processingMessages.size > 0) {
-            // @ts-ignore
             this.logger.warn('Still processing messages at shutdown', {
                 count: this.processingMessages.size,
             });
@@ -264,17 +285,15 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         if (this.consumerTag) {
             try {
                 await this.rabbitChannel.cancel(this.consumerTag);
-                // @ts-ignore
                 this.logger.info('Payment event consumer cancelled', { consumerTag: this.consumerTag });
             } catch (error) {
-                // @ts-ignore
-                this.logger.error('Failed to cancel consumer', {
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                });
+                this.logger.error(
+                    'Failed to cancel consumer',
+                    error instanceof Error ? error : undefined,
+                );
             }
         }
 
-        // @ts-ignore
         this.logger.info('Payment event consumer shut down complete');
     }
 }

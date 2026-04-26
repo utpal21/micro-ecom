@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ============================================
   # Auth Service - Laravel 13
@@ -57,7 +55,7 @@ services:
       - emp-backend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "php", "artisan", "health:check"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/api/health/live"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -78,8 +76,26 @@ services:
     environment:
       # Database Configuration
       - DATABASE_URL=postgres://emp:emp@postgres-order:5432/emp_order
+      - DATABASE_HOST=postgres-order
+      - DATABASE_PORT=5432
+      - DATABASE_USERNAME=${POSTGRES_USER:-emp}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-emp}
+      - DATABASE_NAME=emp_order
+      - DATABASE_SSL=false
       - REDIS_URL=redis://redis-master:6379
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - RABBITMQ_URL=amqp://emp:emp@rabbitmq:5672
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER:-emp}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-emp}
+      - RABBITMQ_ORDER_EXCHANGE=order.exchange
+      - RABBITMQ_PAYMENT_EXCHANGE=payment.exchange
+      - RABBITMQ_ORDER_QUEUE=order.events
+      - RABBITMQ_PAYMENT_QUEUE=order.payment.queue
+      - RABBITMQ_PAYMENT_DLQ=order.payment.queue.dlq
       - AUTH_SERVICE_URL=http://auth-service:8001
       
       # Application Configuration

@@ -1,29 +1,35 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import amqp, { Channel, ConfirmChannel } from 'amqplib';
+import amqp, { ConfirmChannel } from 'amqplib';
 import { ConfigService } from '@nestjs/config';
 import { createLogger } from '@emp/utils';
+import { randomUUID } from 'node:crypto';
+
+type RabbitConnection = amqp.Connection & {
+    createConfirmChannel(): Promise<ConfirmChannel>;
+};
 
 /**
  * Production-grade event publisher with confirm channel and retry logic
  */
 @Injectable()
-export class OrderPublisherService {
+export class OrderPublisherService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = createLogger('order-publisher');
     private readonly exchangeName: string;
     private confirmChannel: ConfirmChannel | null = null;
-    private connection: amqp.Connection | null = null;
     private isConnecting = false;
     private reconnectAttempts = 0;
     private readonly maxReconnectAttempts = 5;
 
     constructor(
         @Inject('RABBITMQ_CONNECTION') private rabbitConnection: amqp.Connection,
-        @Inject('RABBITMQ_CHANNEL') private rabbitChannel: Channel,
         private configService: ConfigService,
     ) {
-        this.exchangeName = this.configService.get('RABBITMQ_EXCHANGE') || 'order.events';
-        this.initializeConfirmChannel();
+        this.exchangeName = this.configService.get<string>('RABBITMQ_ORDER_EXCHANGE') || 'order.exchange';
+    }
+
+    async onModuleInit(): Promise<void> {
+        await this.initializeConfirmChannel();
     }
 
     /**
@@ -37,14 +43,11 @@ export class OrderPublisherService {
         this.isConnecting = true;
 
         try {
-            // Create a confirm channel for reliable publishing
-            this.confirmChannel = await (this.rabbitConnection as any).createConfirmChannel();
-            await (this.confirmChannel as any).confirmSelect();
+            this.confirmChannel = await (this.rabbitConnection as RabbitConnection).createConfirmChannel();
 
             // Set up error handlers
-            this.confirmChannel.on('error', (error: any) => {
-                // @ts-ignore
-                this.logger.error('Confirm channel error', { error: error.message });
+            this.confirmChannel.on('error', (error: Error) => {
+                this.logger.error('Confirm channel error', error);
                 void this.handleChannelError();
             });
 
@@ -56,10 +59,10 @@ export class OrderPublisherService {
             this.reconnectAttempts = 0;
             this.logger.info('Confirm channel initialized successfully');
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Failed to initialize confirm channel', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Failed to initialize confirm channel',
+                error instanceof Error ? error : undefined,
+            );
             void this.handleChannelError();
         } finally {
             this.isConnecting = false;
@@ -99,8 +102,7 @@ export class OrderPublisherService {
 
             return new Promise<boolean>((resolve) => {
                 const timeout = setTimeout(() => {
-                    // @ts-ignore
-                    this.logger.error('Publish confirmation timeout', { routingKey });
+                    this.logger.error('Publish confirmation timeout', undefined, { routingKey });
                     resolve(false);
                 }, 5000);
 
@@ -118,18 +120,14 @@ export class OrderPublisherService {
                             'service': 'order-service',
                             'version': '1.0.0',
                         },
+                        messageId: randomUUID(),
                     },
                     (err) => {
                         clearTimeout(timeout);
                         if (err) {
-                            // @ts-ignore
-                            this.logger.error('Failed to publish event', {
-                                routingKey,
-                                error: err.message,
-                            });
+                            this.logger.error('Failed to publish event', err, { routingKey });
                             resolve(false);
                         } else {
-                            // @ts-ignore
                             this.logger.debug('Event published successfully', { routingKey });
                             resolve(true);
                         }
@@ -137,11 +135,11 @@ export class OrderPublisherService {
                 );
             });
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Error publishing event', {
-                routingKey,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Error publishing event',
+                error instanceof Error ? error : undefined,
+                { routingKey },
+            );
             return false;
         }
     }
@@ -157,9 +155,14 @@ export class OrderPublisherService {
         items: unknown[];
     }): Promise<boolean> {
         return this.publishEvent('order.created', {
-            eventType: 'order.created',
-            timestamp: new Date().toISOString(),
-            ...payload,
+            metadata: {
+                eventId: randomUUID(),
+                eventName: 'order.created',
+                schemaVersion: 1,
+                occurredAt: new Date().toISOString(),
+                producer: 'order-service',
+            },
+            payload,
         });
     }
 
@@ -172,9 +175,14 @@ export class OrderPublisherService {
         reason?: string;
     }): Promise<boolean> {
         return this.publishEvent('order.cancelled', {
-            eventType: 'order.cancelled',
-            timestamp: new Date().toISOString(),
-            ...payload,
+            metadata: {
+                eventId: randomUUID(),
+                eventName: 'order.cancelled',
+                schemaVersion: 1,
+                occurredAt: new Date().toISOString(),
+                producer: 'order-service',
+            },
+            payload,
         });
     }
 
@@ -189,9 +197,14 @@ export class OrderPublisherService {
         reason?: string;
     }): Promise<boolean> {
         return this.publishEvent('order.status.updated', {
-            eventType: 'order.status.updated',
-            timestamp: new Date().toISOString(),
-            ...payload,
+            metadata: {
+                eventId: randomUUID(),
+                eventName: 'order.status.updated',
+                schemaVersion: 1,
+                occurredAt: new Date().toISOString(),
+                producer: 'order-service',
+            },
+            payload,
         });
     }
 
@@ -205,10 +218,10 @@ export class OrderPublisherService {
                 this.logger.info('Confirm channel closed');
             }
         } catch (error) {
-            // @ts-ignore
-            this.logger.error('Error closing confirm channel', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            this.logger.error(
+                'Error closing confirm channel',
+                error instanceof Error ? error : undefined,
+            );
         }
     }
 }

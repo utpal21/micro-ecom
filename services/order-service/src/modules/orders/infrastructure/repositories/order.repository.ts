@@ -4,7 +4,12 @@ import { Repository, DataSource } from 'typeorm';
 import { Order, OrderStatus } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { OrderStatusHistory } from '../entities/order-status-history.entity';
-import { OutboxEvent } from '../outbox/outbox.entity';
+import { OutboxEvent, OutboxStatus } from '../outbox/outbox.entity';
+
+interface CreateOrderResult {
+    order: Order;
+    items: OrderItem[];
+}
 
 @Injectable()
 export class OrderRepository {
@@ -23,20 +28,29 @@ export class OrderRepository {
     /**
      * Create order with items in a transaction
      */
-    async createOrder(orderData: Partial<Order>, items: Partial<OrderItem>[]): Promise<Order> {
+    async createOrder(
+        orderData: Partial<Order>,
+        items: Partial<OrderItem>[],
+        outboxPayload: Record<string, unknown>,
+    ): Promise<CreateOrderResult> {
         return this.dataSource.transaction(async (manager) => {
-            // Create order
             const order = manager.create(Order, orderData);
             const savedOrder = await manager.save(order);
 
-            // Create order items
-            const orderItems = items.map((item) => ({
+            const orderItems = items.map((item) => manager.create(OrderItem, {
                 ...item,
                 orderId: savedOrder.id,
             }));
-            await manager.save(OrderItem, orderItems);
+            const savedItems = await manager.save(OrderItem, orderItems);
 
-            return savedOrder;
+            await manager.save(OutboxEvent, manager.create(OutboxEvent, {
+                eventType: 'order.created',
+                payload: outboxPayload,
+                status: OutboxStatus.PENDING,
+                attempts: 0,
+            }));
+
+            return { order: savedOrder, items: savedItems };
         });
     }
 
@@ -72,6 +86,10 @@ export class OrderRepository {
         newStatus: OrderStatus,
         changedByUserId?: string,
         reason?: string,
+        outboxEvent?: {
+            eventType: string;
+            payload: Record<string, unknown>;
+        },
     ): Promise<Order> {
         return this.dataSource.transaction(async (manager) => {
             const order = await manager.findOne(Order, { where: { id } });
@@ -92,21 +110,19 @@ export class OrderRepository {
             });
 
             await manager.save(OrderStatusHistory, history);
-            return await manager.save(order);
-        });
-    }
+            const updatedOrder = await manager.save(order);
 
-    /**
-     * Save outbox event (for transactional outbox)
-     */
-    async saveOutboxEvent(eventType: string, payload: Record<string, unknown>): Promise<OutboxEvent> {
-        const outboxEvent = this.outboxRepo.create({
-            eventType,
-            payload,
-            status: 'PENDING' as any,
-            attempts: 0,
+            if (outboxEvent) {
+                await manager.save(OutboxEvent, manager.create(OutboxEvent, {
+                    eventType: outboxEvent.eventType,
+                    payload: outboxEvent.payload,
+                    status: OutboxStatus.PENDING,
+                    attempts: 0,
+                }));
+            }
+
+            return updatedOrder;
         });
-        return await this.outboxRepo.save(outboxEvent);
     }
 
     /**
@@ -114,7 +130,7 @@ export class OrderRepository {
      */
     async getPendingOutboxEvents(limit = 100): Promise<OutboxEvent[]> {
         return this.outboxRepo.find({
-            where: { status: 'PENDING' as any },
+            where: { status: OutboxStatus.PENDING },
             order: { createdAt: 'ASC' },
             take: limit,
         });
@@ -125,7 +141,7 @@ export class OrderRepository {
      */
     async markOutboxEventPublished(id: string): Promise<void> {
         await this.outboxRepo.update(id, {
-            status: 'PUBLISHED' as any,
+            status: OutboxStatus.PUBLISHED,
             publishedAt: new Date(),
         });
     }
@@ -138,7 +154,7 @@ export class OrderRepository {
             const event = await manager.findOne(OutboxEvent, { where: { id } });
             if (!event) return;
 
-            event.status = 'FAILED' as any;
+            event.status = event.attempts + 1 >= 3 ? OutboxStatus.FAILED : OutboxStatus.PENDING;
             event.attempts += 1;
             event.lastError = error;
             await manager.save(event);

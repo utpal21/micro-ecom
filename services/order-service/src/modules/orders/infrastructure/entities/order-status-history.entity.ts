@@ -4,34 +4,36 @@ import { Order, OrderStatus } from './order.entity';
 @Entity('order_status_history')
 export class OrderStatusHistory {
     @PrimaryGeneratedColumn('uuid')
-    id: string;
+    id!: string;
 
-    @Column({ type: 'uuid' })
-    orderId: string;
+    @Column({ name: 'order_id', type: 'uuid' })
+    orderId!: string;
 
     @Column({
+        name: 'from_status',
         type: 'enum',
         enum: OrderStatus,
         nullable: true,
     })
-    fromStatus: OrderStatus | null;
+    fromStatus!: OrderStatus | null;
 
     @Column({
+        name: 'to_status',
         type: 'enum',
         enum: OrderStatus,
     })
-    toStatus: OrderStatus;
+    toStatus!: OrderStatus;
 
-    @Column({ type: 'uuid', nullable: true })
-    changedByUserId: string | null;
+    @Column({ name: 'changed_by_user_id', type: 'uuid', nullable: true })
+    changedByUserId!: string | null;
 
-    @CreateDateColumn({ type: 'timestamptz' })
-    changedAt: Date;
+    @CreateDateColumn({ name: 'changed_at', type: 'timestamptz' })
+    changedAt!: Date;
 
-    @Column({ type: 'text', nullable: true })
-    reason: string | null;
+    @Column({ name: 'reason', type: 'text', nullable: true })
+    reason!: string | null;
 
     @ManyToOne(() => Order, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'order_id' })
-    order: Order;
+    order!: Order;
 }
