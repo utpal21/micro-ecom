@@ -39,11 +39,11 @@ COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 USER nestjs
 
 # Expose application port
-EXPOSE 8003
+EXPOSE 8004
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:8003/health/live', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD node -e "require('http').get('http://localhost:8004/health/live', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]

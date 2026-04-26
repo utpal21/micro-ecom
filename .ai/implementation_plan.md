@@ -23,8 +23,8 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 3: Auth Service | COMPLETE | Laravel 13 auth service implemented, JWT/JWKS flows tested, OpenAPI added |
 | | Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
 | | Phase 5: Inventory Service | COMPLETE | All 16 requirements + bonus Redis caching: DDD structure, stock ledger, pessimistic locking, reservations, idempotency, OpenTelemetry, health checks, JWT validation, event consumers, Redis cache with TTL/warming/invalidation, comprehensive tests (87+ tests), Docker setup |
-| | Phase 6: Order Service | BLOCKED | Requires Phase 2.5 prerequisites (Transactional Outbox, PgBouncer, Circuit Breaker, etc.) |
-| | Phase 7: Payment Service | BLOCKED | Requires Phase 2.5 prerequisites (Transactional Outbox, PgBouncer, Circuit Breaker, etc.) |
+| | Phase 6: Order Service | COMPLETE | All 16 requirements implemented: DDD structure, order state machine, status history, idempotency enforcement, transactional outbox, event integration, comprehensive tests, Docker setup |
+| | Phase 7: Payment Service | NOT STARTED | Pending |
 | | Phase 8: Notification Service | NOT STARTED | Pending |
 | | Phase 9a: Admin API Service | NOT STARTED | NestJS 11 backend with RBAC, audit trail, event integration |
 | | Phase 9b: Admin Frontend | NOT STARTED | Next.js 14 dashboard UI |
@@ -33,9 +33,9 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 12: Frontend Integration | NOT STARTED | Pending |
 | | Phase 13: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `5 / 13`
-**Current Phase:** `Phase 2.5 - Shared Packages Foundation (REQUIRED before Phase 6)`
-**Next Phase:** `Phase 6 - Order Service (NestJS 11) - BLOCKED until prerequisites complete`
+**Completed Phases:** `6 / 13`
+**Current Phase:** `Phase 7 - Payment Service (NestJS 11)`
+**Next Phase:** `Phase 8 - Notification Service (Node.js 22)`
 
 ---
 
