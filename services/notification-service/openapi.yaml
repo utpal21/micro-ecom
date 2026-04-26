@@ -1,0 +1,200 @@
+openapi: 3.0.3
+info:
+  title: Notification Service API
+  description: |
+    Production-grade notification service for handling email and SMS notifications 
+    through event-driven architecture using RabbitMQ and Redis.
+  
+    ## Endpoints
+    - **Health Checks**: `/health/live`, `/health/ready`
+    - **Metrics**: `/metrics` (Prometheus format)
+    
+    ## Integration
+    The service consumes events from RabbitMQ queues:
+    - `notification.email` - Email notifications
+    - `notification.sms` - SMS notifications
+    - `events` - Domain events (order.created, payment.completed, etc.)
+  
+  version: 1.0.0
+  contact:
+    name: Enterprise Marketplace Platform Team
+    email: platform-team@emp.com
+  license:
+    name: Internal Enterprise License
+
+servers:
+  - url: http://localhost:8006
+    description: Local development server
+  - url: http://notification-service:8006
+    description: Docker internal network
+
+tags:
+  - name: Health
+    description: Service health and readiness checks
+  - name: Metrics
+    description: Prometheus metrics
+
+paths:
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: |
+        Returns service liveness status. Always returns 200 if the service is running.
+        Used by Kubernetes for liveness probes.
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+              examples:
+                success:
+                  summary: Service is alive
+                  value:
+                    status: ok
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: |
+        Returns service readiness status with dependency health checks.
+        Returns 200 if all dependencies are healthy, 503 otherwise.
+        Used by Kubernetes for readiness probes.
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready and all dependencies are healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                  checks:
+                    type: object
+                    properties:
+                      redis:
+                        type: boolean
+                        description: Redis connection health
+                      rabbitmq:
+                        type: boolean
+                        description: RabbitMQ connection health
+                      smtp:
+                        type: boolean
+                        description: SMTP server connection health
+                      twilio:
+                        type: boolean
+                        description: Twilio API connection health
+              examples:
+                healthy:
+                  summary: All dependencies healthy
+                  value:
+                    status: healthy
+                    checks:
+                      redis: true
+                      rabbitmq: true
+                      smtp: true
+                      twilio: true
+        '503':
+          description: Service is not ready (one or more dependencies unhealthy)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [unhealthy]
+                  checks:
+                    type: object
+                    properties:
+                      redis:
+                        type: boolean
+                      rabbitmq:
+                        type: boolean
+                      smtp:
+                        type: boolean
+                      twilio:
+                        type: boolean
+              examples:
+                unhealthy:
+                  summary: Some dependencies unhealthy
+                  value:
+                    status: unhealthy
+                    checks:
+                      redis: false
+                      rabbitmq: true
+                      smtp: true
+                      twilio: false
+
+  /metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Prometheus metrics
+      description: |
+        Returns service metrics in Prometheus text format.
+        Includes both default Node.js metrics and custom notification service metrics.
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP notification_service_http_requests_total Total number of HTTP requests
+                  # TYPE notification_service_http_requests_total counter
+                  notification_service_http_requests_total{method="GET",route="/health/live",status_code="200"} 42
+                  
+                  # HELP notification_service_notifications_sent_total Total number of notifications sent
+                  # TYPE notification_service_notifications_sent_total counter
+                  notification_service_notifications_sent_total{type="email",status="success"} 100
+                  notification_service_notifications_sent_total{type="sms",status="success"} 50
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        checks:
+          type: object
+          properties:
+            redis:
+              type: boolean
+            rabbitmq:
+              type: boolean
+            smtp:
+              type: boolean
+            twilio:
+              type: boolean
+      required:
+        - status
+        - checks
+    
+    LivenessStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+      required:
+        - status
+
+  securitySchemes: {}
