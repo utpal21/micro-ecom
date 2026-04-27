@@ -1,0 +1,191 @@
+// Prisma Schema for Admin Service
+// Database: PostgreSQL 17
+// Schema: emp_admin
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Admin user accounts
+model Admin {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  role               String
+  permissions        Json?
+  lastLoginAt       DateTime?
+  twoFactorEnabled   Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  // Relations
+  logs               AdminLog[]
+  reviewedApprovals  ProductApproval[]
+  acknowledgedAlerts InventoryAlert[]
+  savedReports       SavedReport[]
+  createdBanners     Banner[]
+  processedSettlements VendorSettlement[]
+
+  @@map("admins")
+  @@index([userId])
+  @@index([role])
+  @@index([createdAt])
+}
+
+// Audit trail for all admin actions
+model AdminLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  resourceType String   @map("resource_type")
+  resourceId  String?  @map("resource_id")
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  admin       Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_logs")
+  @@index([adminId])
+  @@index([createdAt])
+  @@index([resourceType, resourceId], name: "idx_resource")
+  @@index([action])
+}
+
+// Product approval workflow
+model ProductApproval {
+  id              String    @id @default(uuid())
+  productId       String    @unique @map("product_id")
+  vendorId        String    @map("vendor_id")
+  status          String
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  rejectionReason String?   @map("rejection_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  reviewer        Admin?    @relation(fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@map("product_approvals")
+  @@index([productId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([reviewedBy])
+  @@index([createdAt])
+}
+
+// Inventory alerts
+model InventoryAlert {
+  id               String    @id @default(uuid())
+  sku              String
+  threshold        Int
+  currentQuantity  Int       @map("current_quantity")
+  alertType        String    @map("alert_type")
+  acknowledged     Boolean   @default(false)
+  acknowledgedBy   String?   @map("acknowledged_by")
+  acknowledgedAt   DateTime? @map("acknowledged_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  acknowledgedAdmin Admin?     @relation(fields: [acknowledgedBy], references: [id], onDelete: SetNull)
+
+  @@map("inventory_alerts")
+  @@index([sku])
+  @@index([alertType])
+  @@index([acknowledged])
+  @@index([acknowledgedBy])
+  @@index([createdAt])
+}
+
+// Saved custom reports
+model SavedReport {
+  id               String    @id @default(uuid())
+  name             String
+  createdBy        String    @map("created_by")
+  reportConfig     Json      @map("report_config")
+  schedule         String?
+  lastGeneratedAt  DateTime? @map("last_generated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  creator          Admin     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("saved_reports")
+  @@index([createdBy])
+  @@index([schedule])
+  @@index([createdAt])
+}
+
+// Cached dashboard metrics
+model DashboardMetric {
+  id          String    @id @default(uuid())
+  metricName  String    @map("metric_name")
+  metricData  Json      @map("metric_data")
+  periodStart DateTime  @map("period_start")
+  periodEnd   DateTime  @map("period_end")
+  generatedAt DateTime  @default(now()) @map("generated_at")
+
+  @@unique([metricName, periodStart, periodEnd], name: "uq_dashboard_metrics_unique")
+  @@map("dashboard_metrics")
+  @@index([metricName])
+  @@index([periodStart, periodEnd], name: "idx_period_metrics")
+  @@index([generatedAt])
+}
+
+// Promotional banners
+model Banner {
+  id          String    @id @default(uuid())
+  title       String
+  imageUrl    String    @map("image_url")
+  linkUrl     String?   @map("link_url")
+  position    Int
+  status      String
+  displayFrom DateTime  @map("display_from")
+  displayUntil DateTime? @map("display_until")
+  createdBy   String    @map("created_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  creator     Admin     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("banners")
+  @@index([status])
+  @@index([position])
+  @@index([displayFrom, displayUntil], name: "idx_display_period")
+  @@index([createdBy])
+}
+
+// Vendor settlements
+model VendorSettlement {
+  id                    String    @id @default(uuid())
+  vendorId              String    @map("vendor_id")
+  settlementPeriodStart  DateTime  @map("settlement_period_start")
+  settlementPeriodEnd    DateTime  @map("settlement_period_end")
+  totalOrders           Int       @map("total_orders")
+  totalRevenuePaisa     BigInt    @map("total_revenue_paisa")
+  commissionPaisa       BigInt    @map("commission_paisa")
+  netPayoutPaisa       BigInt    @map("net_payout_paisa")
+  status                String
+  processedBy           String?   @map("processed_by")
+  processedAt           DateTime? @map("processed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  processor             Admin?    @relation(fields: [processedBy], references: [id], onDelete: SetNull)
+
+  @@map("vendor_settlements")
+  @@index([vendorId])
+  @@index([status])
+  @@index([settlementPeriodStart, settlementPeriodEnd], name: "idx_settlement_period")
+  @@index([processedBy])
+}
