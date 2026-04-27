@@ -14,6 +14,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
+import { VendorModule } from './modules/vendor/vendor.module';
+import { ContentModule } from './modules/content/content.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -43,6 +45,8 @@ import { HealthModule } from './health/health.module';
     CustomerModule,
     AnalyticsModule,
     ConfigurationModule,
+    VendorModule,
+    ContentModule,
     HealthModule,
   ],
   controllers: [],

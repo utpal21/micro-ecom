@@ -51,6 +51,20 @@ export enum Permission {
     VENDORS_READ = 'vendors.read',
     VENDORS_MANAGE = 'vendors.manage',
     VENDORS_APPROVE = 'vendors.approve',
+    VENDORS_PERFORMANCE_READ = 'vendors.performance.read',
+
+    // Vendor Settlement permissions
+    SETTLEMENTS_READ = 'settlements.read',
+    SETTLEMENTS_CREATE = 'settlements.create',
+    SETTLEMENTS_UPDATE = 'settlements.update',
+    SETTLEMENTS_PROCESS = 'settlements.process',
+
+    // Banner permissions
+    BANNERS_READ = 'banners.read',
+    BANNERS_CREATE = 'banners.create',
+    BANNERS_UPDATE = 'banners.update',
+    BANNERS_DELETE = 'banners.delete',
+    BANNERS_MANAGE = 'banners.manage',
 
     // Report permissions
     REPORTS_FINANCIAL = 'reports.financial',
@@ -60,7 +74,6 @@ export enum Permission {
 
     // Content permissions
     CONTENT_MANAGE = 'content.manage',
-    BANNERS_MANAGE = 'banners.manage',
 
     // System permissions
     USERS_MANAGE = 'users.manage',
@@ -88,6 +101,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
         Permission.CUSTOMERS_READ,
         Permission.CUSTOMERS_MANAGE,
         Permission.VENDORS_READ,
+        Permission.SETTLEMENTS_READ,
+        Permission.SETTLEMENTS_CREATE,
+        Permission.SETTLEMENTS_UPDATE,
+        Permission.SETTLEMENTS_PROCESS,
+        Permission.BANNERS_READ,
+        Permission.BANNERS_CREATE,
+        Permission.BANNERS_UPDATE,
+        Permission.BANNERS_DELETE,
+        Permission.BANNERS_MANAGE,
         Permission.REPORTS_FINANCIAL,
         Permission.REPORTS_SALES,
         Permission.CONTENT_MANAGE,
@@ -99,6 +121,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
         Permission.ORDERS_READ,
         Permission.PAYMENTS_READ,
         Permission.PAYMENTS_REFUND,
+        Permission.SETTLEMENTS_READ,
+        Permission.SETTLEMENTS_CREATE,
+        Permission.SETTLEMENTS_UPDATE,
+        Permission.SETTLEMENTS_PROCESS,
+        Permission.VENDORS_PERFORMANCE_READ,
         Permission.REPORTS_FINANCIAL,
         Permission.REPORTS_SALES,
         Permission.CUSTOMERS_READ,
@@ -115,8 +142,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     ],
 
     [UserRole.CONTENT_MANAGER]: [
-        Permission.CONTENT_MANAGE,
+        Permission.BANNERS_READ,
+        Permission.BANNERS_CREATE,
+        Permission.BANNERS_UPDATE,
+        Permission.BANNERS_DELETE,
         Permission.BANNERS_MANAGE,
+        Permission.CONTENT_MANAGE,
         Permission.PRODUCTS_READ,
     ],
 
@@ -140,6 +171,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
         Permission.PRODUCTS_UPDATE,
         Permission.ORDERS_READ,
         Permission.VENDORS_READ,
+        Permission.VENDORS_PERFORMANCE_READ,
     ],
 
     [UserRole.CUSTOMER]: [
