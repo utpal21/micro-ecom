@@ -24,51 +24,41 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Nginx API Gateway                      │
-│                 (Port 80/443 → 8007)                     │
+│         (Port 80/443 → Admin API: 8007, Admin UI: 8008) │
 └────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   ADMIN SERVICE (Next.js 14)                 │
-│                        Port 8007                           │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  API Layer (App Router)                               │  │
-│  │  - /api/admin/products                                │  │
-│  │  - /api/admin/orders                                  │  │
-│  │  - /api/admin/inventory                               │  │
-│  │  - /api/admin/customers                                │  │
-│  │  - /api/admin/reports                                 │  │
-│  │  - /api/admin/dashboard                               │  │
-│  │  - /api/admin/content                                 │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                         │                                   │
-│  ┌────────────────────▼──────────────────────────────────┐  │
-│  │  Service Layer (Business Logic)                       │  │
-│  │  - ProductService                                    │  │
-│  │  - OrderService                                      │  │
-│  │  - InventoryService                                   │  │
-│  │  - CustomerService                                    │  │
-│  │  - ReportService                                     │  │
-│  │  - DashboardService                                   │  │
-│  └────────────────────┬──────────────────────────────────┘  │
-│                         │                                   │
-│  ┌────────────────────▼──────────────────────────────────┐  │
-│  │  Repository Layer (Data Access)                      │  │
-│  │  - AdminRepository                                   │  │
-│  │  - ProductApprovalRepository                          │  │
-│  │  - InventoryAlertRepository                           │  │
-│  │  - SavedReportRepository                             │  │
-│  │  - DashboardMetricsRepository                         │  │
-│  └────────────────────┬──────────────────────────────────┘  │
-└────────────────────────┼────────────────────────────────────┘
-                         │
-         ┌───────────────┼───────────────┐
-         │               │               │
-         ▼               ▼               ▼
-┌────────────────┐ ┌──────────┐ ┌──────────────┐
-│ PostgreSQL 17 │ │ Redis    │ │ Elasticsearch │
-│ (admin DB)    │ │ (Cache)  │ │ (Search)     │
-└────────────────┘ └──────────┘ └──────────────┘
+                          │
+          ┌───────────────┴───────────────┐
+          │                               │
+          ▼                               ▼
+┌──────────────────────────┐  ┌─────────────────────────────────┐
+│  Admin API Service      │  │   Admin Frontend (React 18)   │
+│  (NestJS 11)          │  │   (Port 8008)                  │
+│  Port 8007             │  │                                │
+│  ┌────────────────────┐ │  │  ┌──────────────────────────┐ │
+│  │ API Layer          │ │  │  │ React Components         │ │
+│  │ - /api/admin/*   │ │  │  │ - Dashboard              │ │
+│  └────────┬───────────┘ │  │  │ - Products              │ │
+│           │             │  │  │ - Orders                │ │
+│  ┌────────▼───────────┐ │  │  │ - Inventory             │ │
+│  │ Service Layer       │ │  │  │ - Customers             │ │
+│  │ - ProductService   │ │  │  │ - Reports               │ │
+│  │ - OrderService     │ │  │  └────────┬───────────────┘ │
+│  │ - ReportService    │ │  │           │                  │
+│  └────────┬───────────┘ │  │  ┌────────▼───────────────┐ │
+│           │             │  │  │ State Management        │ │
+│  ┌────────▼───────────┐ │  │  │ - React Query v5       │ │
+│  │ Repository Layer    │ │  │  │ - Zustand              │ │
+│  │ - AdminRepository  │ │  │  │ - React Router v6      │ │
+│  └────────┬───────────┘ │  │  └───────────────────────┘ │
+└───────────┼─────────────┘  └─────────────────────────────────┘
+            │
+    ┌───────┼───────┐
+    │               │
+    ▼               ▼
+┌─────────┐   ┌──────────┐
+│Postgres │   │  Redis   │
+│admin DB │   │  Cache   │
+└─────────┘   └──────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                  RabbitMQ Event Bus                         │
@@ -93,10 +83,11 @@
 
 | Layer | Responsibility | Technology |
 |--------|---------------|-------------|
-| **Presentation Layer** | HTTP request/response, UI components | Next.js App Router, React |
+| **API Presentation Layer** | HTTP request/response | NestJS Controllers |
+| **UI Presentation Layer** | User interface components | React 18 + Vite |
 | **Application Layer** | Business logic, orchestration | TypeScript Services |
 | **Data Access Layer** | Database operations | Prisma ORM |
-| **Infrastructure Layer** | External services, caching, events | Redis, RabbitMQ, Elasticsearch |
+| **Infrastructure Layer** | External services, caching, events | Redis, RabbitMQ |
 
 ---
 
@@ -620,36 +611,45 @@ services/admin-service/
 
 ### Folder Structure Rationale
 
-#### `app/` - Next.js App Router
-- **Pages**: Server-side rendered pages for admin UI
-- **API Routes**: RESTful API endpoints
-- **Route Groups**: `(admin)` for shared layout
+#### Admin API Service (NestJS 11) - Port 8007
 
-#### `modules/` - Feature Modules
+#### `src/modules/` - Feature Modules
 - **Domain-Driven**: Each feature is self-contained
 - **Layers**: Controllers, Services, Repositories, DTOs, Schemas
 - **Separation of Concerns**: Clear boundaries between layers
 
-#### `events/` - Event Integration
+#### `src/events/` - Event Integration
 - **Consumers**: Handle events from other services
 - **Publishers**: Emit events to other services
 - **Decoupling**: Async communication without direct dependencies
 
-#### `cache/` - Caching Layer
+#### `src/cache/` - Caching Layer
 - **Redis Integration**: Cache frequently accessed data
 - **Cache Keys**: Centralized key management
 - **TTL Management**: Configurable cache expiration
 
-#### `middleware/` - Cross-cutting Concerns
+#### `src/middleware/` - Cross-cutting Concerns
 - **Authentication**: JWT validation
 - **Authorization**: RBAC enforcement
 - **Audit Logging**: Track all admin actions
 - **Error Handling**: Standardized error responses
 
-#### `components/` - React Components
+#### Admin Frontend (React 18 + Vite) - Port 8008
+
+#### `src/components/` - React Components
 - **Reusable UI**: Shared across admin pages
 - **Feature-Specific**: Components per domain
 - **Consistent UX**: Unified design language
+
+#### `src/pages/` - React Pages
+- **Page Components**: Main page implementations
+- **Route-Based**: Organized by domain
+- **Lazy Loading**: Code splitting for performance
+
+#### `src/hooks/` - Custom React Hooks
+- **Data Fetching**: React Query hooks
+- **State Management**: Zustand stores
+- **Utilities**: Reusable hook logic
 
 ---
 
@@ -863,19 +863,34 @@ Admin Action → Controller
 
 ## Technology Stack Rationale
 
-### Next.js 14 (App Router)
+### React 18 + Vite (Admin Frontend)
 
 **Why:**
-- **Full-Stack**: Single framework for backend and frontend
-- **SSR Support**: Server-side rendering for performance
-- **API Routes**: Built-in API endpoint support
+- **Simplicity**: Pure SPA for admin dashboard - no need for SSR/SEO
+- **Performance**: Faster build times with Vite, smaller bundle size
+- **Modern Stack**: React 18 concurrent features, Vite's HMR
+- **Separation**: Clean separation from NestJS backend API
 - **TypeScript**: Native TypeScript support
-- **Ecosystem**: Large community and plugin ecosystem
+- **Ecosystem**: Vast React ecosystem and component libraries
 
 **Alternatives Considered:**
-- Express.js (backend-only, would need separate frontend)
-- NestJS (backend-only, would need separate frontend)
-- Next.js Pages Router (older, App Router is the future)
+- Next.js 14 (overkill for private admin dashboard, unused SSR features)
+- Create React App (CRA deprecated, slower than Vite)
+- Vue.js (team less familiar with Vue than React)
+
+### NestJS 11 (Admin API Backend)
+
+**Why:**
+- **Enterprise-Ready**: Built-in support for modules, guards, interceptors, pipes
+- **TypeScript**: Native TypeScript support with decorators
+- **Consistency**: Same framework as other backend services (Product, Inventory, Order, Payment)
+- **Patterns**: Enforces best practices (dependency injection, modular architecture)
+- **Ecosystem**: Excellent tooling, testing, and community
+
+**Alternatives Considered:**
+- Express.js (no structure, harder to maintain at scale)
+- Fastify (faster but less mature ecosystem)
+- Next.js API Routes (would couple API to frontend framework)
 
 ### PostgreSQL 17
 

@@ -27,15 +27,14 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 7: Payment Service | COMPLETE | All 17 requirements implemented: DDD structure, double-entry ledger, SSLCommerz IPN validation, COD flows, transactional outbox, comprehensive tests, Docker setup |
 | | Phase 8: Notification Service | COMPLETE | All 10 requirements implemented: Email/SMS channels, template registry, RabbitMQ consumers, idempotency, health checks, metrics, comprehensive tests (unit/integration/E2E), Docker setup, Swagger UI |
 | | Phase 9a: Admin API Service | NOT STARTED | NestJS 11 backend with RBAC, audit trail, event integration |
-| | Phase 9b: Admin Frontend | NOT STARTED | Next.js 14 dashboard UI |
-| | Phase 10: Search/Catalog Service | NOT STARTED | NestJS 11 + Elasticsearch for product search |
-| | Phase 11: API Gateway & Security Hardening | NOT STARTED | Pending |
-| | Phase 12: Frontend Integration | NOT STARTED | Pending |
-| | Phase 13: Deployment Readiness & Observability | NOT STARTED | Pending |
+| | Phase 9b: Admin Frontend | NOT STARTED | React 18 + Vite dashboard UI |
+| | Phase 10: API Gateway & Security Hardening | NOT STARTED | Pending |
+| | Phase 11: Frontend Integration | NOT STARTED | Pending |
+| | Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `8 / 13`
+**Completed Phases:** `8 / 12`
 **Current Phase:** `Phase 9a - Admin API Service (NestJS 11)`
-**Next Phase:** `Phase 9b - Admin Frontend (Next.js 14)`
+**Next Phase:** `Phase 9b - Admin Frontend (React 18 + Vite)`
 
 ---
 
@@ -76,20 +75,34 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 
 ## Phase 4: Product Service (NestJS 11)
 **Goal:** Establish the Product Catalogue & Search functionality (Port: 8002).
-1. **Setup & DB:** Initialize NestJS 11 with MongoDB (Mongoose).
-2. **Folder Structure:** Create concrete module layout: `config/`, `health/`, `common/`, `products/`, `categories/` with domain/application/infrastructure/interfaces separation.
+**Note:** Elasticsearch integrated directly into Product Service for simpler architecture - search is a product feature, not a separate domain.
+1. **Setup & DB:** Initialize NestJS 11 with MongoDB (Mongoose) and Elasticsearch 8.x for advanced search.
+2. **Folder Structure:** Create concrete module layout: `config/`, `health/`, `common/`, `products/`, `categories/`, `search/` with domain/application/infrastructure/interfaces separation.
 3. **OpenTelemetry Bootstrap:** Initialize OTel SDK BEFORE anything else in main.ts with service name and version.
 4. **Config Module:** Create config service that validates ALL environment variables at startup using Joi or class-validator.
-5. **Health Endpoints:** Implement `/health/live` (always 200) and `/health/ready` (checks MongoDB, Redis, RabbitMQ) FIRST.
+5. **Health Endpoints:** Implement `/health/live` (always 200) and `/health/ready` (checks MongoDB, Elasticsearch, Redis, RabbitMQ) FIRST.
 6. **JWT Validator Middleware:** Implement the 8-step local JWKS validation flow with Redis cache and in-process LRU fallback.
 7. **Domain Implementation:** Create schemas and REST endpoints for Products and Categories with Zod-backed DTOs.
 8. **Redis Key Registry:** Implement cache keys with TTL: `products:list:*` (300s), `products:detail:*` (600s), `categories:tree` (1800s), `jwks:public_keys` (3600s).
 9. **Cache Stampede Prevention:** Implement Redlock distributed lock pattern for cache rebuilds with 5s TTL.
 10. **MongoDB Indexes:** Create migration scripts for indexes (slug unique, category/status/created_at compound, vendor_id/status, text search).
-11. **Event Consumer:** Implement consumers for domain events with idempotency checks via `processed_events` table.
-12. **Prometheus Metrics:** Expose required metrics: `http_requests_total`, `http_request_duration_seconds`, `db_query_duration_seconds`, `cache_hits_total`, `cache_misses_total`, `rabbitmq_messages_consumed_total`.
-13. **Testing Matrix:** Implement unit (business logic, cache, JWT), integration (API, cache flow, health), contract (Zod validation), failure (dependency outage), idempotency tests.
-14. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck directive, and resource limits in docker-compose.
+11. **Elasticsearch Integration:**
+    - Create product index with proper mapping (text fields, keywords, numbers, dates)
+    - Implement real-time sync on product create/update/delete operations
+    - Sync process: MongoDB write → Elasticsearch update (same transaction context)
+    - Implement search with faceted filters (category, price range, vendor, status)
+    - Autocomplete/suggest functionality for product names
+    - Aggregations for categories, price ranges, vendors
+    - Search endpoint with pagination, sorting, and highlighting
+    - Cache popular search queries in Redis (300s TTL)
+12. **Search API Endpoints:**
+    - `GET /products/search?q={query}&filters={...}&page={page}&sort={sort}` - Full-text search with faceting
+    - `GET /products/suggest?q={query}` - Autocomplete suggestions
+    - `GET /products/search/facets` - Available facets and counts
+13. **Event Consumer:** Implement consumers for domain events with idempotency checks via `processed_events` table.
+14. **Prometheus Metrics:** Expose required metrics: `http_requests_total`, `http_request_duration_seconds`, `db_query_duration_seconds`, `cache_hits_total`, `cache_misses_total`, `rabbitmq_messages_consumed_total`, `elasticsearch_query_duration_seconds`, `elasticsearch_sync_latency_seconds`.
+15. **Testing Matrix:** Implement unit (business logic, cache, JWT, search), integration (API, cache flow, health, Elasticsearch), contract (Zod validation), failure (dependency outage, Elasticsearch unavailability), idempotency tests.
+16. **Docker Production:** Create multi-stage Dockerfile with non-root user, healthcheck directive, resource limits in docker-compose, and Elasticsearch sidecar container.
 
 ## Phase 5: Inventory Service (NestJS 11)
 **Goal:** Stock Ledger, Pessimistic Locking, and Reservations (Port: 8004).
@@ -287,20 +300,21 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 22. **Testing Matrix:** Implement unit (business logic, RBAC, audit logging), integration (API, event flow, caching), contract (OpenAPI schema), event (publish/consume round-trip), idempotency (duplicate events), failure (dependency outage), performance (P95 < 200ms).
 23. **Docker Production:** Create multi-stage Dockerfile with non-root user, HEALTHCHECK directive, resource limits in docker-compose, and PgBouncer sidecar.
 
-## Phase 9b: Admin Frontend (Next.js 14)
+## Phase 9b: Admin Frontend (React 18 + Vite)
 **Goal:** Admin Dashboard UI consuming Admin API Service (Port: 8008).
-**Note:** Split from Admin API Service per Staff Architect Review for proper separation of concerns.
-1. **Setup:** Initialize Next.js 14 with App Router, TypeScript, TailwindCSS, and UI component library (shadcn/ui or similar).
+**Note:** Using React 18 + Vite instead of Next.js for simpler architecture - admin dashboards don't need SSR/SEO.
+1. **Setup:** Initialize React 18 with Vite, TypeScript, TailwindCSS, and UI component library (shadcn/ui or similar).
 2. **Authentication:**
-   - Implement next-auth v5 with httpOnly cookies for JWT
+   - Implement auth client with httpOnly cookies for JWT storage
    - JWT validation via Admin API Service endpoints
-   - Protected routes using middleware
-   - Token refresh mechanism
+   - Protected routes using React Router v6 guards
+   - Token refresh mechanism with axios interceptors
 3. **State Management:**
-   - TanStack React Query for server state (API calls)
+   - TanStack React Query (v5) for server state (API calls)
    - Zustand for UI state (modals, filters, sidebar)
    - React Context for auth state
-4. **Layout & Navigation:**
+4. **Routing & Layout:**
+   - React Router v6 for client-side routing
    - Responsive sidebar with role-based menu items
    - Top navigation with user profile and notifications
    - Breadcrumb navigation
@@ -342,44 +356,18 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
     - Image upload to S3/MinIO
     - Display period configuration
 13. **Error Handling:**
-    - Global error boundary
-    - API error toast notifications
+    - React Error Boundaries for component trees
+    - Axios interceptors for API error handling
+    - Global toast notifications (sonner/react-hot-toast)
     - Loading states and skeletons
 14. **Performance:**
-    - Code splitting and lazy loading
-    - Image optimization (next/image)
-    - Caching strategies
+    - Code splitting with React.lazy and Suspense
+    - Image optimization with modern formats
+    - Aggressive caching strategies with React Query
 15. **Testing:** Implement E2E tests with Playwright, unit tests with Vitest, component tests with React Testing Library.
 16. **Docker Production:** Create multi-stage Dockerfile with Nginx for static file serving, healthcheck, and resource limits.
 
-## Phase 10: Search/Catalog Service (NestJS 11)
-**Goal:** Dedicated product search and catalog service with Elasticsearch (Port: 8009).
-**Note:** New service per Staff Architect Review - search deserves its own service.
-1. **Setup & Infrastructure:**
-   - Initialize NestJS 11
-   - Setup Elasticsearch 8.x cluster
-   - Configure Redis for caching
-2. **Elasticsearch Integration:**
-   - Create product index with proper mapping
-   - Implement search with faceted filters
-   - Autocomplete/suggest functionality
-   - Aggregations for categories, price ranges, etc.
-3. **Event Integration:**
-   - Consume product.created, product.updated, product.deleted events
-   - Sync product data to Elasticsearch in near real-time
-4. **API Endpoints:**
-   - Search endpoint with pagination
-   - Faceted filtering
-   - Autocomplete endpoint
-   - Category browsing
-5. **Caching:**
-   - Cache热门 search queries
-   - Cache category trees
-   - TTL-based invalidation
-6. **Testing:** Unit tests for search logic, integration tests with Elasticsearch, event sync tests.
-7. **Docker Production:** Multi-stage Dockerfile with Elasticsearch sidecar, healthcheck, resource limits.
-
-## Phase 11: API Gateway (Nginx)
+## Phase 10: API Gateway (Nginx)
 **Goal:** Finalize Nginx configurations with security hardening.
 1. **Gateway Rules:** Configure `nginx.conf` routing to upstream service architectures (`proxy_pass`).
 2. **Rate Limiting:** Enforce strict limits: auth zone (10r/m burst 5), api zone (100r/m burst 20).
@@ -388,7 +376,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 5. **CORS Policy:** Configure CORS for API Gateway (allow from frontend domain); do NOT add CORS to internal service-to-service calls.
 6. **Testing:** Verify rate limit returns JSON 429, security headers present, internal services communicate without CORS.
 
-## Phase 12: Frontend Integration (Next.js 14)
+## Phase 11: Frontend Integration (Next.js 14)
 **Goal:** User-facing Web Application.
 1. **Setup:** Next.js 14 App Router, set up TailwindCSS and UI component library.
 2. **State Management:** Setup `next-auth` (v5) with httpOnly cookies for JWT, Zustand (for cart UI preferences), and TanStack React Query (for server state).
@@ -401,7 +389,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 6. **Dashboards:** Customer, Vendor, and Admin Role-Based protected views.
 7. **Testing:** Implement error boundary fallbacks, verify auth state management, test error scenarios.
 
-## Phase 13: Deployment Readiness & Observability
+## Phase 12: Deployment Readiness & Observability
 **Goal:** Prepare for production SLA.
 1. **Observability Stack:** Deploy Promtail, Loki, Prometheus, Grafana, and Jaeger in `docker-compose.yml`.
 2. **OpenTelemetry Bootstrap:** Ensure ALL services initialize OTel SDK BEFORE any application code (NestJS: main.ts, Laravel: bootstrap/app.php).
