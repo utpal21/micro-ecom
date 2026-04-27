@@ -9,7 +9,7 @@ describe('Template Registry', () => {
                 variables: ['name', 'orderId'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 name: 'John Doe',
                 orderId: 'ORD-123',
             });
@@ -25,7 +25,7 @@ describe('Template Registry', () => {
                 variables: ['orderId', 'amount'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 orderId: 'ORD-123',
                 // amount is missing
             });
@@ -41,7 +41,7 @@ describe('Template Registry', () => {
                 variables: ['name'],
             };
 
-            const result = renderTemplate('test.template', template, {});
+            const result = renderTemplate(template, {});
 
             expect(result.subject).toBe('Hello {{name}}');
             expect(result.body).toBe('Welcome!');
@@ -54,7 +54,7 @@ describe('Template Registry', () => {
                 variables: ['orderId', 'customer', 'total'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 orderId: 'ORD-123',
                 customer: 'John',
                 total: '99.99',
@@ -71,7 +71,7 @@ describe('Template Registry', () => {
                 variables: ['email', 'phone'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 email: 'test+special@example.com',
                 phone: '+1-234-567-8900',
             });
@@ -86,7 +86,7 @@ describe('Template Registry', () => {
                 variables: ['orderId', 'name'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 orderId: 'ORD-123',
                 name: '张三',
             });
@@ -111,7 +111,7 @@ describe('Template Registry', () => {
                 variables: ['orderId', 'name', 'trackingNumber'],
             };
 
-            const result = renderTemplate('test.template', template, {
+            const result = renderTemplate(template, {
                 orderId: 'ORD-123',
                 name: 'John',
                 trackingNumber: 'TRK-789',

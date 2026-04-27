@@ -1,59 +1,80 @@
-import http from 'http';
-import { config } from './config/config.js';
+import express, { Express, Request, Response, NextFunction } from 'express';
+import swaggerUi from 'swagger-ui-express';
+import * as YAML from 'yamljs';
 import { logger } from './utils/logger.js';
 import { getLiveness, getReadiness } from './health/health.js';
 import { register } from './metrics/metrics.js';
 
-export function createServer(): http.Server {
-    return http.createServer(async (req, res) => {
-        const start = Date.now();
-        const method = req.method || 'GET';
-        const url = req.url || '/';
+const app = express();
 
-        try {
-            // Health endpoints
-            if (url === '/health/live') {
-                const status = await getLiveness();
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(status));
-                return;
-            }
+// Middleware
+app.use(express.json());
 
-            if (url === '/health/ready') {
-                const status = await getReadiness();
-                const statusCode = status.status === 'healthy' ? 200 : 503;
-                res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(status));
-                return;
-            }
+// Load OpenAPI spec
+const swaggerDocument = YAML.load('./openapi.yaml');
 
-            // Metrics endpoint
-            if (url === '/metrics') {
-                res.writeHead(200, { 'Content-Type': register.contentType });
-                res.end(await register.metrics());
-                return;
-            }
+// Swagger UI
+(app as any).use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-            // 404 for other routes
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Not Found' }));
-        } catch (error) {
-            logger.error('HTTP server error', {
-                method,
-                url,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+// Health endpoints
+app.get('/health/live', async (_req: Request, res: Response) => {
+    const status = await getLiveness();
+    res.json(status);
+});
 
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Internal Server Error' }));
-        } finally {
-            const duration = (Date.now() - start) / 1000;
-            logger.info('HTTP request', {
-                method,
-                url,
-                status: res.statusCode,
-                duration: duration.toFixed(3),
-            });
-        }
+app.get('/health/ready', async (_req: Request, res: Response) => {
+    const status = await getReadiness();
+    const statusCode = status.status === 'healthy' ? 200 : 503;
+    res.status(statusCode).json(status);
+});
+
+// Metrics endpoint
+app.get('/metrics', async (_req: Request, res: Response) => {
+    res.set('Content-Type', register.contentType);
+    res.send(await register.metrics());
+});
+
+// API documentation endpoint (OpenAPI JSON)
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+    res.json(swaggerDocument);
+});
+
+// Request logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+
+    res.on('finish', () => {
+        const duration = (Date.now() - start) / 1000;
+        logger.info({
+            msg: 'HTTP request',
+            method: req.method,
+            url: req.url,
+            status: res.statusCode,
+            duration: duration.toFixed(3),
+        });
     });
+
+    next();
+});
+
+// 404 handler
+app.use((req: Request, res: Response, _next: NextFunction) => {
+    res.status(404).json({ error: 'Not Found', path: req.url });
+});
+
+// Error handler
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+    logger.error({
+        msg: 'HTTP server error',
+        method: req.method,
+        url: req.url,
+        error: err.message,
+        stack: err.stack,
+    });
+
+    res.status(500).json({ error: 'Internal Server Error' });
+});
+
+export function createServer(): Express {
+    return app;
 }

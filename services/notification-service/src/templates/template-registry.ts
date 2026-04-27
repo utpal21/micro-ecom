@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export interface Template {
     subject: string;
     body: string;
@@ -167,7 +165,7 @@ export function renderTemplate(template: Template, variables: Record<string, unk
     });
 
     // Handle conditional blocks (simple implementation)
-    body = body.replace(/{{#if\s+(\w+)}}(.*?){{\/if}}/gs, (match, varName, content) => {
+    body = body.replace(/{{#if\s+(\w+)}}(.*?){{\/if}}/gs, (_match: any, varName: string, content: string) => {
         const value = variables[varName];
         return value ? content : '';
     });

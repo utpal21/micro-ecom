@@ -24,8 +24,8 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 4: Product Service | COMPLETE | NestJS 11 product service implemented, Swagger added |
 | | Phase 5: Inventory Service | COMPLETE | All 16 requirements + bonus Redis caching: DDD structure, stock ledger, pessimistic locking, reservations, idempotency, OpenTelemetry, health checks, JWT validation, event consumers, Redis cache with TTL/warming/invalidation, comprehensive tests (87+ tests), Docker setup |
 | | Phase 6: Order Service | COMPLETE | All 16 requirements implemented: DDD structure, order state machine, status history, idempotency enforcement, transactional outbox, event integration, comprehensive tests, Docker setup |
-| | Phase 7: Payment Service | NOT STARTED | Pending |
-| | Phase 8: Notification Service | NOT STARTED | Pending |
+| | Phase 7: Payment Service | COMPLETE | All 17 requirements implemented: DDD structure, double-entry ledger, SSLCommerz IPN validation, COD flows, transactional outbox, comprehensive tests, Docker setup |
+| | Phase 8: Notification Service | COMPLETE | All 10 requirements implemented: Email/SMS channels, template registry, RabbitMQ consumers, idempotency, health checks, metrics, comprehensive tests (unit/integration/E2E), Docker setup, Swagger UI |
 | | Phase 9a: Admin API Service | NOT STARTED | NestJS 11 backend with RBAC, audit trail, event integration |
 | | Phase 9b: Admin Frontend | NOT STARTED | Next.js 14 dashboard UI |
 | | Phase 10: Search/Catalog Service | NOT STARTED | NestJS 11 + Elasticsearch for product search |
@@ -33,9 +33,9 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 12: Frontend Integration | NOT STARTED | Pending |
 | | Phase 13: Deployment Readiness & Observability | NOT STARTED | Pending |
 
-**Completed Phases:** `6 / 13`
-**Current Phase:** `Phase 7 - Payment Service (NestJS 11)`
-**Next Phase:** `Phase 8 - Notification Service (Node.js 22)`
+**Completed Phases:** `8 / 13`
+**Current Phase:** `Phase 9a - Admin API Service (NestJS 11)`
+**Next Phase:** `Phase 9b - Admin Frontend (Next.js 14)`
 
 ---
 

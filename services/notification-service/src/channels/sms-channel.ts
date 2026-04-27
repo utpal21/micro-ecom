@@ -22,7 +22,8 @@ export class SmsChannel {
                 to: message.to,
             });
 
-            logger.info('SMS sent successfully', {
+            logger.info({
+                msg: 'SMS sent successfully',
                 to: message.to,
                 sid: sms.sid,
                 status: sms.status,
@@ -34,7 +35,8 @@ export class SmsChannel {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            logger.error('Failed to send SMS', {
+            logger.error({
+                msg: 'Failed to send SMS',
                 to: message.to,
                 error: errorMessage,
             });
@@ -52,7 +54,8 @@ export class SmsChannel {
             await this.client.api.accounts(config.twilio.accountSid).fetch();
             return true;
         } catch (error) {
-            logger.error('Twilio connection verification failed', {
+            logger.error({
+                msg: 'Twilio connection verification failed',
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
             return false;

@@ -13,14 +13,19 @@ export async function handleEmailNotification(
     nack: (requeue: boolean) => void
 ): Promise<void> {
     const { metadata, payload } = message;
-    const { eventId, eventName, traceId, requestId } = metadata;
+    const { eventId, eventName, traceId } = metadata;
 
-    logger.info('Processing email notification', { eventId, eventName, traceId });
+    logger.info({
+        msg: 'Processing email notification',
+        eventId,
+        eventName,
+        traceId
+    });
 
     try {
         // Check idempotency
         if (await isEventProcessed(eventId)) {
-            logger.info('Event already processed, skipping', { eventId });
+            logger.info({ msg: 'Event already processed, skipping', eventId });
             ack();
             return;
         }
@@ -28,7 +33,7 @@ export async function handleEmailNotification(
         // Get template
         const template = getTemplate(eventName);
         if (!template) {
-            logger.warn('No template found for event', { eventName });
+            logger.warn({ msg: 'No template found for event', eventName });
             ack();
             return;
         }
@@ -44,21 +49,24 @@ export async function handleEmailNotification(
         });
 
         if (result.success) {
-            logger.info('Email notification sent successfully', {
+            logger.info({
+                msg: 'Email notification sent successfully',
                 eventId,
                 messageId: result.messageId,
             });
             await markEventProcessed(eventId);
             ack();
         } else {
-            logger.error('Failed to send email notification', {
+            logger.error({
+                msg: 'Failed to send email notification',
                 eventId,
                 error: result.error,
             });
             nack(false); // Move to DLQ
         }
     } catch (error) {
-        logger.error('Error processing email notification', {
+        logger.error({
+            msg: 'Error processing email notification',
             eventId,
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
@@ -73,14 +81,19 @@ export async function handleSmsNotification(
     nack: (requeue: boolean) => void
 ): Promise<void> {
     const { metadata, payload } = message;
-    const { eventId, eventName, traceId, requestId } = metadata;
+    const { eventId, eventName, traceId } = metadata;
 
-    logger.info('Processing SMS notification', { eventId, eventName, traceId });
+    logger.info({
+        msg: 'Processing SMS notification',
+        eventId,
+        eventName,
+        traceId
+    });
 
     try {
         // Check idempotency
         if (await isEventProcessed(eventId)) {
-            logger.info('Event already processed, skipping', { eventId });
+            logger.info({ msg: 'Event already processed, skipping', eventId });
             ack();
             return;
         }
@@ -88,7 +101,7 @@ export async function handleSmsNotification(
         // Get template
         const template = getTemplate(eventName);
         if (!template) {
-            logger.warn('No template found for event', { eventName });
+            logger.warn({ msg: 'No template found for event', eventName });
             ack();
             return;
         }
@@ -103,21 +116,24 @@ export async function handleSmsNotification(
         });
 
         if (result.success) {
-            logger.info('SMS notification sent successfully', {
+            logger.info({
+                msg: 'SMS notification sent successfully',
                 eventId,
                 sid: result.sid,
             });
             await markEventProcessed(eventId);
             ack();
         } else {
-            logger.error('Failed to send SMS notification', {
+            logger.error({
+                msg: 'Failed to send SMS notification',
                 eventId,
                 error: result.error,
             });
             nack(false); // Move to DLQ
         }
     } catch (error) {
-        logger.error('Error processing SMS notification', {
+        logger.error({
+            msg: 'Error processing SMS notification',
             eventId,
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
@@ -132,14 +148,19 @@ export async function handleDomainEvent(
     nack: (requeue: boolean) => void
 ): Promise<void> {
     const { metadata, payload } = message;
-    const { eventId, eventName, traceId, requestId } = metadata;
+    const { eventId, eventName, traceId } = metadata;
 
-    logger.info('Processing domain event for notification', { eventId, eventName, traceId });
+    logger.info({
+        msg: 'Processing domain event for notification',
+        eventId,
+        eventName,
+        traceId
+    });
 
     try {
         // Check idempotency
         if (await isEventProcessed(eventId)) {
-            logger.info('Event already processed, skipping', { eventId });
+            logger.info({ msg: 'Event already processed, skipping', eventId });
             ack();
             return;
         }
@@ -147,7 +168,7 @@ export async function handleDomainEvent(
         // Get template
         const template = getTemplate(eventName);
         if (!template) {
-            logger.warn('No template found for event', { eventName });
+            logger.warn({ msg: 'No template found for event', eventName });
             ack();
             return;
         }
@@ -163,7 +184,8 @@ export async function handleDomainEvent(
         });
 
         if (result.success) {
-            logger.info('Notification sent successfully', {
+            logger.info({
+                msg: 'Notification sent successfully',
                 eventId,
                 eventName,
                 messageId: result.messageId,
@@ -171,7 +193,8 @@ export async function handleDomainEvent(
             await markEventProcessed(eventId);
             ack();
         } else {
-            logger.error('Failed to send notification', {
+            logger.error({
+                msg: 'Failed to send notification',
                 eventId,
                 eventName,
                 error: result.error,
@@ -179,7 +202,8 @@ export async function handleDomainEvent(
             nack(false); // Move to DLQ
         }
     } catch (error) {
-        logger.error('Error processing domain event for notification', {
+        logger.error({
+            msg: 'Error processing domain event for notification',
             eventId,
             eventName,
             error: error instanceof Error ? error.message : 'Unknown error',

@@ -11,30 +11,31 @@ export async function connectRedis(): Promise<void> {
             port: config.redis.port,
             password: config.redis.password,
             db: config.redis.db,
-            retryStrategy: (times) => {
+            retryStrategy: (times: number) => {
                 const delay = Math.min(times * 50, 2000);
                 return delay;
             },
         });
 
         redisClient.on('connect', () => {
-            logger.info('Redis connected successfully');
+            logger.info({ msg: 'Redis connected successfully' });
         });
 
-        redisClient.on('error', (error) => {
-            logger.error('Redis connection error', { error: error.message });
+        redisClient.on('error', (error: Error) => {
+            logger.error({ msg: 'Redis connection error', error: error.message });
         });
 
         redisClient.on('close', () => {
-            logger.warn('Redis connection closed');
+            logger.warn({ msg: 'Redis connection closed' });
         });
 
         // Test connection
         await redisClient.ping();
-        logger.info('Redis connection verified');
+        logger.info({ msg: 'Redis connection verified' });
     } catch (error) {
-        logger.error('Failed to connect to Redis', {
-            error: error instanceof Error ? error.message : 'Unknown error',
+        logger.error({
+            msg: 'Failed to connect to Redis',
+            error: error instanceof Error ? error.message : 'Unknown error'
         });
         throw error;
     }

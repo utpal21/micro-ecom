@@ -1,4 +1,3 @@
-import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import { redisClient } from '../utils/redis.js';
 import { connection as rabbitmqConnection } from '../utils/rabbitmq.js';
@@ -37,18 +36,20 @@ export async function getReadiness(): Promise<HealthStatus> {
             checks.redis = true;
         }
     } catch (error) {
-        logger.error('Redis health check failed', {
+        logger.error({
+            msg: 'Redis health check failed',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
     }
 
     // Check RabbitMQ
     try {
-        if (rabbitmqConnection && !rabbitmqConnection.isConnected()) {
+        if (rabbitmqConnection && rabbitmqConnection.isConnected()) {
             checks.rabbitmq = true;
         }
     } catch (error) {
-        logger.error('RabbitMQ health check failed', {
+        logger.error({
+            msg: 'RabbitMQ health check failed',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
     }
@@ -58,7 +59,8 @@ export async function getReadiness(): Promise<HealthStatus> {
         const smtpConnected = await emailChannel.verifyConnection();
         checks.smtp = smtpConnected;
     } catch (error) {
-        logger.error('SMTP health check failed', {
+        logger.error({
+            msg: 'SMTP health check failed',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
     }
@@ -68,7 +70,8 @@ export async function getReadiness(): Promise<HealthStatus> {
         const twilioConnected = await smsChannel.verifyConnection();
         checks.twilio = twilioConnected;
     } catch (error) {
-        logger.error('Twilio health check failed', {
+        logger.error({
+            msg: 'Twilio health check failed',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
     }

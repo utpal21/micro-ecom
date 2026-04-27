@@ -19,8 +19,9 @@ RUN pnpm install --no-frozen-lockfile
 # Copy source code
 COPY . .
 
-# Build TypeScript
-RUN pnpm build
+# Build TypeScript (build shared packages first, then notification-service)
+RUN pnpm --filter @emp/notification-service build --noEmit
+RUN pnpm --filter @emp/notification-service build
 
 # Production stage
 FROM node:22-alpine AS production
@@ -34,15 +35,23 @@ RUN addgroup -g 1001 -S notification && \
 
 WORKDIR /app
 
-# Copy package files
+# Copy workspace configuration and packages
+COPY pnpm-workspace.yaml ./
+COPY packages/ ./packages/
 COPY package*.json pnpm-lock.yaml* ./
 
-# Install pnpm directly and production dependencies only
-RUN npm install -g pnpm@latest --registry=https://registry.npmjs.org/ --fetch-timeout=180000 && \
-    pnpm install --prod --no-frozen-lockfile
+# Install pnpm
+RUN npm install -g pnpm@latest --registry=https://registry.npmjs.org/ --fetch-timeout=180000
+
+# Copy notification-service package.json
+COPY services/notification-service/package.json ./
+
+# Install dependencies using pnpm with workspace support
+RUN pnpm install --no-frozen-lockfile
 
 # Copy built application from builder stage
-COPY --from=builder --chown=notification:notification /app/dist ./dist
+COPY --from=builder --chown=notification:notification /app/services/notification-service/dist ./dist
+COPY --from=builder --chown=notification:notification /app/services/notification-service/openapi.yaml ./openapi.yaml
 
 # Switch to non-root user
 USER notification

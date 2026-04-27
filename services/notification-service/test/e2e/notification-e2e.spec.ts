@@ -1,8 +1,8 @@
 import http from 'http';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 
-const exec = promisify(exec);
+const execAsync = promisify(exec);
 
 describe('End-to-End Notification Service Tests', () => {
     const SERVICE_URL = process.env.SERVICE_URL || 'http://localhost:8006';
@@ -12,10 +12,10 @@ describe('End-to-End Notification Service Tests', () => {
     async function waitForService(): Promise<boolean> {
         for (let i = 0; i < MAX_RETRIES; i++) {
             try {
-                await new Promise((resolve, reject) => {
+                await new Promise<void>((resolve, reject) => {
                     http.get(`${SERVICE_URL}/health/live`, (res) => {
                         if (res.statusCode === 200) {
-                            resolve(res);
+                            resolve();
                         } else {
                             reject(new Error(`Status: ${res.statusCode}`));
                         }
@@ -24,7 +24,7 @@ describe('End-to-End Notification Service Tests', () => {
                 return true;
             } catch (error) {
                 if (i < MAX_RETRIES - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+                    await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY));
                 }
             }
         }
@@ -51,7 +51,7 @@ describe('End-to-End Notification Service Tests', () => {
             const response = await fetch(`${SERVICE_URL}/health/live`);
             expect(response.status).toBe(200);
 
-            const body = await response.json();
+            const body = await response.json() as { status: string };
             expect(body.status).toBe('ok');
         });
 
@@ -59,7 +59,7 @@ describe('End-to-End Notification Service Tests', () => {
             const response = await fetch(`${SERVICE_URL}/health/ready`);
             expect([200, 503]).toContain(response.status);
 
-            const body = await response.json();
+            const body = await response.json() as { status: string; checks: Record<string, unknown> };
             expect(body.status).toMatch(/healthy|unhealthy/);
             expect(body.checks).toBeDefined();
             expect(body.checks).toHaveProperty('redis');
@@ -121,7 +121,7 @@ describe('End-to-End Notification Service Tests', () => {
             });
             expect(response.status).toBe(404);
 
-            const body = await response.json();
+            const body = await response.json() as { error: string };
             expect(body.error).toBe('Not Found');
         });
 
@@ -186,7 +186,7 @@ describe('End-to-End Notification Service Tests', () => {
         });
 
         it('should consistently return valid metrics', async () => {
-            const metricsSamples = [];
+            const metricsSamples: string[] = [];
 
             for (let i = 0; i < 5; i++) {
                 const response = await fetch(`${SERVICE_URL}/metrics`);
@@ -196,7 +196,7 @@ describe('End-to-End Notification Service Tests', () => {
                 metricsSamples.push(metrics);
 
                 // Small delay between requests
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await new Promise<void>((resolve) => setTimeout(resolve, 100));
             }
 
             // All samples should be non-empty
@@ -214,10 +214,10 @@ describe('End-to-End Notification Service Tests', () => {
             }
 
             try {
-                const { stdout } = await exec('docker ps --format "{{.Names}}"');
-                const runningContainers = stdout.split('\n').filter((c) => c.trim());
+                const { stdout } = await execAsync('docker ps --format "{{.Names}}"');
+                const runningContainers = stdout.split('\n').filter((c: string) => c.trim());
 
-                const notificationContainer = runningContainers.find((c) =>
+                const notificationContainer = runningContainers.find((c: string) =>
                     c.includes('notification-service')
                 );
 
@@ -238,15 +238,15 @@ describe('End-to-End Notification Service Tests', () => {
             }
 
             try {
-                const { stdout } = await exec('docker ps --format "{{.Names}}"');
-                const runningContainers = stdout.split('\n').filter((c) => c.trim());
+                const { stdout } = await execAsync('docker ps --format "{{.Names}}"');
+                const runningContainers = stdout.split('\n').filter((c: string) => c.trim());
 
-                const notificationContainer = runningContainers.find((c) =>
+                const notificationContainer = runningContainers.find((c: string) =>
                     c.includes('notification-service')
                 );
 
                 if (notificationContainer) {
-                    const { stdout: envOutput } = await exec(
+                    const { stdout: envOutput } = await execAsync(
                         `docker exec ${notificationContainer} printenv`
                     );
 

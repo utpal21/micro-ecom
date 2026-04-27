@@ -1,5 +1,4 @@
 // Test setup file for Jest
-import { config } from '../src/config/config.js';
 
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';

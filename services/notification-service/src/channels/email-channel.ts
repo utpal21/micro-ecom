@@ -34,7 +34,8 @@ export class EmailChannel {
                 html: message.html ? message.body : undefined,
             });
 
-            logger.info('Email sent successfully', {
+            logger.info({
+                msg: 'Email sent successfully',
                 to: message.to,
                 messageId: info.messageId,
                 subject: message.subject,
@@ -46,7 +47,8 @@ export class EmailChannel {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            logger.error('Failed to send email', {
+            logger.error({
+                msg: 'Failed to send email',
                 to: message.to,
                 subject: message.subject,
                 error: errorMessage,
@@ -64,7 +66,8 @@ export class EmailChannel {
             await this.transporter.verify();
             return true;
         } catch (error) {
-            logger.error('SMTP connection verification failed', {
+            logger.error({
+                msg: 'SMTP connection verification failed',
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
             return false;

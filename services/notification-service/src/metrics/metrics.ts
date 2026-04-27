@@ -1,5 +1,4 @@
 import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
-import { config } from '../config/config.js';
 
 export const register = new Registry();
 

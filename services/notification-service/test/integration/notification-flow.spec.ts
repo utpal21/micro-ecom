@@ -21,7 +21,7 @@ describe('Notification Flow Integration Tests', () => {
 
     describe('Health Endpoints', () => {
         it('should return 200 for liveness check', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/health/live`, (res) => {
+            http.get(`http://localhost:${serverPort}/health/live`, (res) => {
                 expect(res.statusCode).toBe(200);
                 let data = '';
                 res.on('data', (chunk) => {
@@ -36,7 +36,7 @@ describe('Notification Flow Integration Tests', () => {
         });
 
         it('should return 200 or 503 for readiness check', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/health/ready`, (res) => {
+            http.get(`http://localhost:${serverPort}/health/ready`, (res) => {
                 expect([200, 503]).toContain(res.statusCode);
                 let data = '';
                 res.on('data', (chunk) => {
@@ -54,7 +54,7 @@ describe('Notification Flow Integration Tests', () => {
 
     describe('Metrics Endpoint', () => {
         it('should return metrics in Prometheus format', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/metrics`, (res) => {
+            http.get(`http://localhost:${serverPort}/metrics`, (res) => {
                 expect(res.statusCode).toBe(200);
                 expect(res.headers['content-type']).toMatch(/text\/plain/);
                 done();
@@ -62,7 +62,7 @@ describe('Notification Flow Integration Tests', () => {
         });
 
         it('should contain default Node.js metrics', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/metrics`, (res) => {
+            http.get(`http://localhost:${serverPort}/metrics`, (res) => {
                 let data = '';
                 res.on('data', (chunk) => {
                     data += chunk;
@@ -76,7 +76,7 @@ describe('Notification Flow Integration Tests', () => {
         });
 
         it('should contain custom notification service metrics', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/metrics`, (res) => {
+            http.get(`http://localhost:${serverPort}/metrics`, (res) => {
                 let data = '';
                 res.on('data', (chunk) => {
                     data += chunk;
@@ -93,7 +93,7 @@ describe('Notification Flow Integration Tests', () => {
 
     describe('Error Handling', () => {
         it('should return 404 for unknown routes', (done) => {
-            const req = http.get(`http://localhost:${serverPort}/unknown`, (res) => {
+            http.get(`http://localhost:${serverPort}/unknown`, (res) => {
                 expect(res.statusCode).toBe(404);
                 let data = '';
                 res.on('data', (chunk) => {
