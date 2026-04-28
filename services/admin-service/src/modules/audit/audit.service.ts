@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { AuditLog } from '@prisma/client';
 
 interface CreateAuditLogDto {
     adminId: string;
@@ -21,12 +20,12 @@ export class AuditService {
     /**
      * Create a new audit log entry
      */
-    async createLog(data: CreateAuditLogDto): Promise<AuditLog> {
+    async createLog(data: CreateAuditLogDto): Promise<any> {
         // Redact sensitive data from oldValues and newValues
         const sanitizedOldValues = this.redactSensitiveData(data.oldValues);
         const sanitizedNewValues = this.redactSensitiveData(data.newValues);
 
-        return this.prisma.auditLog.create({
+        return this.prisma.adminLog.create({
             data: {
                 adminId: data.adminId,
                 action: data.action,
@@ -36,7 +35,6 @@ export class AuditService {
                 newValues: sanitizedNewValues,
                 ipAddress: data.ipAddress,
                 userAgent: data.userAgent,
-                metadata: this.redactSensitiveData(data.metadata),
             },
         });
     }
@@ -86,13 +84,13 @@ export class AuditService {
         }
 
         const [logs, total] = await Promise.all([
-            this.prisma.auditLog.findMany({
+            this.prisma.adminLog.findMany({
                 where,
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limit,
             }),
-            this.prisma.auditLog.count({ where }),
+            this.prisma.adminLog.count({ where }),
         ]);
 
         return {
@@ -110,7 +108,7 @@ export class AuditService {
      * Get audit log by ID
      */
     async getLogById(id: string): Promise<any> {
-        return this.prisma.auditLog.findUnique({
+        return this.prisma.adminLog.findUnique({
             where: { id },
         });
     }
@@ -187,22 +185,22 @@ export class AuditService {
             resourceTypeCounts,
             adminCounts,
         ] = await Promise.all([
-            this.prisma.auditLog.count({ where }),
-            this.prisma.auditLog.groupBy({
+            this.prisma.adminLog.count({ where }),
+            this.prisma.adminLog.groupBy({
                 by: ['action'],
                 where,
                 _count: true,
                 orderBy: { _count: { action: 'desc' } },
                 take: 10,
             }),
-            this.prisma.auditLog.groupBy({
+            this.prisma.adminLog.groupBy({
                 by: ['resourceType'],
                 where,
                 _count: true,
                 orderBy: { _count: { resourceType: 'desc' } },
                 take: 10,
             }),
-            this.prisma.auditLog.groupBy({
+            this.prisma.adminLog.groupBy({
                 by: ['adminId'],
                 where,
                 _count: true,

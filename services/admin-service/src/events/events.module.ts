@@ -1,24 +1,25 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { EventPublisherService } from './event-publisher.service';
 import { RabbitMQModule } from '../infrastructure/messaging/rabbitmq.module';
 import { VendorEventConsumer } from './consumers/vendor.consumer';
-import { ContentEventConsumer } from './consumers/content.consumer';
 import { VendorEventPublisher } from './publishers/vendor.publisher';
-import { ContentEventPublisher } from './publishers/content.publisher';
+import { VendorModule } from '../modules/vendor/vendor.module';
+import { AuditModule } from '../modules/audit/audit.module';
 
 @Module({
-    imports: [RabbitMQModule],
+    imports: [
+        RabbitMQModule,
+        forwardRef(() => VendorModule),
+        AuditModule,
+    ],
     providers: [
         EventPublisherService,
         VendorEventConsumer,
-        ContentEventConsumer,
         VendorEventPublisher,
-        ContentEventPublisher,
     ],
     exports: [
         EventPublisherService,
         VendorEventPublisher,
-        ContentEventPublisher,
     ],
 })
 export class EventsModule { }

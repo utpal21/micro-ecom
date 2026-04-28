@@ -1,59 +1,69 @@
-import { IsString, IsOptional, IsEnum, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber, IsObject, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
-export enum ConfigCategory {
-    GENERAL = 'general',
-    PAYMENT = 'payment',
-    SHIPPING = 'shipping',
-    TAX = 'tax',
-    NOTIFICATION = 'notification',
-    SECURITY = 'security',
-    INTEGRATION = 'integration',
-}
-
-export class CreateConfigDto {
+export class CreateConfigurationDto {
     @IsString()
     key: string;
 
-    @IsString()
-    value: string;
-
-    @IsEnum(ConfigCategory)
-    category: ConfigCategory;
-
-    @IsOptional()
-    @IsString()
-    description?: string;
-
-    @IsOptional()
-    @IsString()
-    type?: 'string' | 'number' | 'boolean' | 'json';
-}
-
-export class UpdateConfigDto {
     @IsOptional()
     @IsString()
     value?: string;
 
     @IsOptional()
+    @IsNumber()
+    numberValue?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    booleanValue?: boolean;
+
+    @IsOptional()
+    @IsObject()
+    jsonValue?: Record<string, any>;
+
+    @IsString()
+    category: string;
+
+    @IsOptional()
     @IsString()
     description?: string;
 }
 
-export class BulkUpdateConfigDto {
+export class UpdateConfigurationDto {
+    @IsOptional()
+    @IsString()
+    value?: string;
+
+    @IsOptional()
+    @IsNumber()
+    numberValue?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    booleanValue?: boolean;
+
+    @IsOptional()
     @IsObject()
-    configs: Record<string, any>;
+    jsonValue?: Record<string, any>;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
 }
 
-export class ConfigQueryDto {
-    @IsOptional()
-    @IsEnum(ConfigCategory)
-    category?: ConfigCategory;
-
-    @IsOptional()
+export class BulkUpdateConfigurationDto {
     @IsString()
-    key?: string;
+    category: string;
 
-    @IsOptional()
-    @IsString()
-    search?: string;
+    @IsObject()
+    configurations: Record<string, any>;
+}
+
+export class ConfigurationResponseDto {
+    key: string;
+    value: string | number | boolean | Record<string, any>;
+    category: string;
+    description: string;
+    updatedAt: Date;
+    createdAt: Date;
 }

@@ -165,14 +165,42 @@ model Banner {
   @@index([createdBy])
 }
 
+// Vendor profiles
+model Vendor {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  businessName          String    @map("business_name")
+  contactEmail          String    @map("contact_email")
+  contactPhone          String    @map("contact_phone")
+  taxId                 String?   @map("tax_id")
+  commissionRate        Float     @map("commission_rate")
+  status                String
+  totalOrders           Int       @default(0) @map("total_orders")
+  totalRevenuePaisa     BigInt    @default(0) @map("total_revenue_paisa")
+  averageRating         Float     @default(0) @map("average_rating")
+  totalProducts         Int       @default(0) @map("total_products")
+  approvedProducts      Int       @default(0) @map("approved_products")
+  pendingApprovals      Int       @default(0) @map("pending_approvals")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("vendors")
+  @@index([userId])
+  @@index([status])
+  @@index([businessName])
+  @@index([createdAt])
+}
+
 // Vendor settlements
 model VendorSettlement {
   id                    String    @id @default(uuid())
   vendorId              String    @map("vendor_id")
+  vendorName            String    @map("vendor_name")
   settlementPeriodStart  DateTime  @map("settlement_period_start")
   settlementPeriodEnd    DateTime  @map("settlement_period_end")
   totalOrders           Int       @map("total_orders")
   totalRevenuePaisa     BigInt    @map("total_revenue_paisa")
+  commissionRate         Float     @map("commission_rate")
   commissionPaisa       BigInt    @map("commission_paisa")
   netPayoutPaisa       BigInt    @map("net_payout_paisa")
   status                String
@@ -188,4 +216,24 @@ model VendorSettlement {
   @@index([status])
   @@index([settlementPeriodStart, settlementPeriodEnd], name: "idx_settlement_period")
   @@index([processedBy])
+}
+
+// System configurations
+model Configuration {
+  key          String   @id
+  value        String?  @db.Text
+  numberValue  Float?   @map("number_value")
+  booleanValue Boolean?  @map("boolean_value") @default(false)
+  jsonValue    Json?    @map("json_value")
+  category     String
+  description  String?  @db.Text
+  createdBy    String?  @map("created_by")
+  updatedBy    String?  @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("configurations")
+  @@index([category])
+  @@index([key])
+  @@index([createdAt])
 }

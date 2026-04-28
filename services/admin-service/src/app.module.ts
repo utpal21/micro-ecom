@@ -8,15 +8,15 @@ import configuration from './infrastructure/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { EventsModule } from './events/events.module';
-import { ProductModule } from './modules/product/product.module';
-import { OrderModule } from './modules/order/order.module';
-import { InventoryModule } from './modules/inventory/inventory.module';
-import { CustomerModule } from './modules/customer/customer.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
-import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { VendorModule } from './modules/vendor/vendor.module';
-import { ContentModule } from './modules/content/content.module';
+import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { HealthModule } from './health/health.module';
+import { ProductModule } from './modules/products/product.module';
+import { OrderModule } from './modules/order/order.module';
+import { CustomerModule } from './modules/customer/customer.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -39,14 +39,14 @@ import { HealthModule } from './health/health.module';
     AuthModule,
 
     // Feature Modules
+    AnalyticsModule,
+    VendorModule,
+    ConfigurationModule,
     ProductModule,
     OrderModule,
-    InventoryModule,
     CustomerModule,
-    AnalyticsModule,
-    ConfigurationModule,
-    VendorModule,
-    ContentModule,
+    InventoryModule,
+    DashboardModule,
     HealthModule,
   ],
   controllers: [],

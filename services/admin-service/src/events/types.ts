@@ -55,6 +55,11 @@ export enum PublishedEventType {
     CUSTOMER_BLOCKED = 'customer.blocked',
     CUSTOMER_UNBLOCKED = 'customer.unblocked',
 
+    // Vendor Management
+    VENDOR_CREATED = 'vendor.created',
+    VENDOR_STATUS_CHANGED = 'vendor.status_changed',
+    SETTLEMENT_COMPLETED = 'settlement.completed',
+
     // System
     ADMIN_ACTION_LOGGED = 'admin.action.logged',
 }

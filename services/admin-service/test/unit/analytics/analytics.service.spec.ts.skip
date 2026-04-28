@@ -1,0 +1,432 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { AnalyticsService } from '../../../src/modules/analytics/analytics.service';
+import { PrismaService } from '../../../src/infrastructure/database/prisma.service';
+import { CacheService } from '../../../src/infrastructure/cache/cache.service';
+import { AnalyticsQueryDto, TopProductsQueryDto, TopCustomersQueryDto } from '../../../src/modules/analytics/dto/analytics.dto';
+
+describe('AnalyticsService', () => {
+    let service: AnalyticsService;
+    let prisma: PrismaService;
+    let cache: CacheService;
+
+    const mockPrisma = {
+        vendor: {
+            count: jest.fn(),
+        },
+        productApproval: {
+            count: jest.fn(),
+        },
+        vendorSettlement: {
+            count: jest.fn(),
+        },
+        banner: {
+            count: jest.fn(),
+        },
+        dashboardMetric: {
+            findFirst: jest.fn(),
+            update: jest.fn(),
+            create: jest.fn(),
+        },
+    };
+
+    const mockCache = {
+        get: jest.fn(),
+        set: jest.fn(),
+        invalidatePattern: jest.fn(),
+    };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                AnalyticsService,
+                {
+                    provide: PrismaService,
+                    useValue: mockPrisma,
+                },
+                {
+                    provide: CacheService,
+                    useValue: mockCache,
+                },
+            ],
+        }).compile();
+
+        service = module.get<AnalyticsService>(AnalyticsService);
+        prisma = module.get<PrismaService>(PrismaService);
+        cache = module.get<CacheService>(CacheService);
+
+        jest.clearAllMocks();
+    });
+
+    describe('getDashboardMetrics', () => {
+        it('should return dashboard metrics from cache', async () => {
+            const cachedMetrics = {
+                totalRevenue: 50000,
+                totalOrders: 1000,
+                averageOrderValue: 50,
+                totalCustomers: 500,
+                totalProducts: 200,
+                pendingOrders: 50,
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedMetrics));
+
+            const result = await service.getDashboardMetrics({});
+
+            expect(result).toEqual(cachedMetrics);
+            expect(mockCache.get).toHaveBeenCalled();
+        });
+
+        it('should return empty metrics when no cache or data available', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const result = await service.getDashboardMetrics({});
+
+            expect(result.totalRevenue).toBe(0);
+            expect(result.totalOrders).toBe(0);
+            expect(result.note).toContain('aggregated from cached metrics');
+        });
+
+        it('should return cached dashboard metric from database', async () => {
+            const metricData = {
+                totalRevenue: 50000,
+                totalOrders: 1000,
+            };
+
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue({
+                metricData,
+            });
+
+            const result = await service.getDashboardMetrics({});
+
+            expect(result.totalRevenue).toBe(50000);
+            expect(mockCache.set).toHaveBeenCalled();
+        });
+
+        it('should apply period filters', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const query: AnalyticsQueryDto = {
+                period: 'LAST_7_DAYS' as any,
+            };
+
+            await service.getDashboardMetrics(query);
+
+            expect(mockPrisma.dashboardMetric.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        metricName: 'dashboard_metrics',
+                    }),
+                }),
+            );
+        });
+    });
+
+    describe('getRevenueAnalytics', () => {
+        it('should return revenue analytics from cache', async () => {
+            const cachedRevenue = {
+                total: 50000,
+                average: 100,
+                byStatus: [{ status: 'PAID', amount: 50000 }],
+                daily: [{ date: '2024-01-01', amount: 5000 }],
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedRevenue));
+
+            const result = await service.getRevenueAnalytics({});
+
+            expect(result).toEqual(cachedRevenue);
+        });
+
+        it('should return empty revenue when no data available', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const result = await service.getRevenueAnalytics({});
+
+            expect(result.total).toBe(0);
+            expect(result.average).toBe(0);
+            expect(result.byStatus).toEqual([]);
+        });
+    });
+
+    describe('getOrderAnalytics', () => {
+        it('should return order analytics from cache', async () => {
+            const cachedOrders = {
+                total: 1000,
+                byStatus: [{ status: 'COMPLETED', count: 600 }],
+                daily: [{ date: '2024-01-01', count: 100 }],
+                mostCommonStatus: 'COMPLETED',
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedOrders));
+
+            const result = await service.getOrderAnalytics({});
+
+            expect(result).toEqual(cachedOrders);
+        });
+
+        it('should return empty orders when no data available', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const result = await service.getOrderAnalytics({});
+
+            expect(result.total).toBe(0);
+            expect(result.mostCommonStatus).toBeNull();
+        });
+    });
+
+    describe('getProductAnalytics', () => {
+        it('should return product analytics from cache', async () => {
+            const cachedProducts = {
+                totalProducts: 200,
+                lowStock: 10,
+                outOfStock: 5,
+                topSelling: [
+                    { id: '1', name: 'Product 1', sales: 100 },
+                ],
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedProducts));
+
+            const result = await service.getProductAnalytics({});
+
+            expect(result).toEqual(cachedProducts);
+        });
+
+        it('should return empty product data when no cache available', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const result = await service.getProductAnalytics({});
+
+            expect(result.totalProducts).toBe(0);
+            expect(result.lowStock).toBe(0);
+            expect(result.topSelling).toEqual([]);
+        });
+    });
+
+    describe('getCustomerAnalytics', () => {
+        it('should return customer analytics from cache', async () => {
+            const cachedCustomers = {
+                totalCustomers: 500,
+                newCustomers: 50,
+                activeCustomers: 300,
+                highValueCustomers: 100,
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedCustomers));
+
+            const result = await service.getCustomerAnalytics({});
+
+            expect(result).toEqual(cachedCustomers);
+        });
+
+        it('should return empty customer data when no cache available', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const result = await service.getCustomerAnalytics({});
+
+            expect(result.totalCustomers).toBe(0);
+            expect(result.newCustomers).toBe(0);
+        });
+    });
+
+    describe('getTopProducts', () => {
+        it('should return top products from cache', async () => {
+            const cachedProducts = [
+                { id: '1', name: 'Product 1', sales: 100 },
+                { id: '2', name: 'Product 2', sales: 80 },
+            ];
+
+            mockCache.get.mockResolvedValue(
+                JSON.stringify({
+                    products: cachedProducts,
+                }),
+            );
+
+            const query: TopProductsQueryDto = { limit: 10 };
+            const result = await service.getTopProducts(query);
+
+            expect(result).toEqual(cachedProducts);
+        });
+
+        it('should use default limit when not provided', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+
+            const query: TopProductsQueryDto = {};
+            await service.getTopProducts(query);
+
+            expect(mockCache.get).toHaveBeenCalledWith(
+                expect.stringContaining('analytics:top-products:10'),
+            );
+        });
+    });
+
+    describe('getTopCustomers', () => {
+        it('should return top customers from cache', async () => {
+            const cachedCustomers = [
+                { id: '1', name: 'Customer 1', totalSpent: 5000 },
+                { id: '2', name: 'Customer 2', totalSpent: 4000 },
+            ];
+
+            mockCache.get.mockResolvedValue(
+                JSON.stringify({
+                    customers: cachedCustomers,
+                }),
+            );
+
+            const query: TopCustomersQueryDto = { limit: 10 };
+            const result = await service.getTopCustomers(query);
+
+            expect(result).toEqual(cachedCustomers);
+        });
+    });
+
+    describe('getAdminAnalytics', () => {
+        it('should return admin analytics from database', async () => {
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.vendor.count.mockResolvedValue(10);
+            mockPrisma.productApproval.count.mockResolvedValue(5);
+            mockPrisma.vendorSettlement.count
+                .mockResolvedValueOnce(20)
+                .mockResolvedValueOnce(3);
+            mockPrisma.banner.count.mockResolvedValue(5);
+
+            const result = await service.getAdminAnalytics();
+
+            expect(result).toHaveProperty('vendors');
+            expect(result).toHaveProperty('settlements');
+            expect(result).toHaveProperty('content');
+            expect(result.vendors.total).toBe(10);
+            expect(result.vendors.pendingApprovals).toBe(5);
+            expect(result.settlements.total).toBe(20);
+            expect(result.settlements.pending).toBe(3);
+            expect(result.content.activeBanners).toBe(5);
+        });
+
+        it('should return cached admin analytics', async () => {
+            const cachedAnalytics = {
+                vendors: { total: 10, pendingApprovals: 5 },
+                settlements: { total: 20, pending: 3 },
+                content: { activeBanners: 5 },
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedAnalytics));
+
+            const result = await service.getAdminAnalytics();
+
+            expect(result).toEqual(cachedAnalytics);
+            expect(mockPrisma.vendor.count).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('getComprehensiveAnalytics', () => {
+        it('should return comprehensive analytics combining all sources', async () => {
+            const revenueAnalytics = { total: 50000, average: 100, byStatus: [], daily: [] };
+            const orderAnalytics = { total: 1000, byStatus: [], daily: [], mostCommonStatus: 'COMPLETED' };
+            const productAnalytics = { totalProducts: 200, lowStock: 10, outOfStock: 5, topSelling: [] };
+            const customerAnalytics = { totalCustomers: 500, newCustomers: 50, activeCustomers: 300, highValueCustomers: 100 };
+            const adminAnalytics = {
+                vendors: { total: 10, pendingApprovals: 5 },
+                settlements: { total: 20, pending: 3 },
+                content: { activeBanners: 5 },
+            };
+
+            mockCache.get.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+            mockPrisma.vendor.count.mockResolvedValue(10);
+            mockPrisma.productApproval.count.mockResolvedValue(5);
+            mockPrisma.vendorSettlement.count
+                .mockResolvedValueOnce(20)
+                .mockResolvedValueOnce(3);
+            mockPrisma.banner.count.mockResolvedValue(5);
+
+            const result = await service.getComprehensiveAnalytics({});
+
+            expect(result).toHaveProperty('period');
+            expect(result).toHaveProperty('revenue');
+            expect(result).toHaveProperty('orders');
+            expect(result).toHaveProperty('products');
+            expect(result).toHaveProperty('customers');
+            expect(result).toHaveProperty('admin');
+        });
+    });
+
+    describe('refreshDashboardMetrics', () => {
+        it('should create new metric when not exists', async () => {
+            const metricData = { totalRevenue: 50000, totalOrders: 1000 };
+            const periodStart = new Date('2024-01-01');
+            const periodEnd = new Date('2024-01-31');
+
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue(null);
+            mockPrisma.dashboardMetric.create.mockResolvedValue({
+                id: '1',
+                metricName: 'dashboard_metrics',
+                metricData,
+            });
+
+            const result = await service.refreshDashboardMetrics(
+                'dashboard_metrics',
+                periodStart,
+                periodEnd,
+                metricData,
+            );
+
+            expect(result.success).toBe(true);
+            expect(mockPrisma.dashboardMetric.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        metricName: 'dashboard_metrics',
+                        metricData,
+                    }),
+                }),
+            );
+        });
+
+        it('should update existing metric', async () => {
+            const metricData = { totalRevenue: 60000, totalOrders: 1200 };
+            const periodStart = new Date('2024-01-01');
+            const periodEnd = new Date('2024-01-31');
+
+            mockPrisma.dashboardMetric.findFirst.mockResolvedValue({
+                id: '1',
+                metricName: 'dashboard_metrics',
+            });
+            mockPrisma.dashboardMetric.update.mockResolvedValue({
+                id: '1',
+                metricData,
+            });
+
+            const result = await service.refreshDashboardMetrics(
+                'dashboard_metrics',
+                periodStart,
+                periodEnd,
+                metricData,
+            );
+
+            expect(result.success).toBe(true);
+            expect(mockPrisma.dashboardMetric.update).toHaveBeenCalled();
+            expect(mockCache.invalidatePattern).toHaveBeenCalled();
+        });
+
+        it('should handle errors gracefully', async () => {
+            mockPrisma.dashboardMetric.findFirst.mockRejectedValue(new Error('Database error'));
+
+            const result = await service.refreshDashboardMetrics(
+                'dashboard_metrics',
+                new Date(),
+                new Date(),
+                {},
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBeDefined();
+        });
+    });
+});

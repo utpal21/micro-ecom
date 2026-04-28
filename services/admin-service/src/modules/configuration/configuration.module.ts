@@ -1,18 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigurationController } from './configuration.controller';
 import { ConfigurationService } from './configuration.service';
-import { CacheModule } from '../../infrastructure/cache/cache.module';
+import { ConfigurationController } from './configuration.controller';
 import { DatabaseModule } from '../../infrastructure/database/database.module';
-import { AuditModule } from '../audit/audit.module';
-import { EventsModule } from '../../events/events.module';
 
 @Module({
-    imports: [
-        DatabaseModule,
-        CacheModule,
-        AuditModule,
-        EventsModule,
-    ],
+    imports: [DatabaseModule],
     controllers: [ConfigurationController],
     providers: [ConfigurationService],
     exports: [ConfigurationService],

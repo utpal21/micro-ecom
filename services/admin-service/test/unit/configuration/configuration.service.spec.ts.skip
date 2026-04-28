@@ -1,0 +1,201 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import { ConfigurationService } from '../../../src/modules/configuration/configuration.service';
+import { PrismaService } from '../../../src/infrastructure/database/prisma.service';
+import { AuditService } from '../../../src/modules/audit/audit.service';
+import { CreateConfigDto, UpdateConfigDto } from '../../../src/modules/configuration/dto/configuration.dto';
+
+describe('ConfigurationService', () => {
+    let service: ConfigurationService;
+    let prisma: PrismaService;
+    let audit: AuditService;
+
+    const mockPrisma = {
+        systemConfiguration: {
+            findMany: jest.fn(),
+            findFirst: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+            findUnique: jest.fn(),
+        },
+        $transaction: jest.fn(),
+    };
+
+    const mockAudit = {
+        logAction: jest.fn(),
+    };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ConfigurationService,
+                {
+                    provide: PrismaService,
+                    useValue: mockPrisma,
+                },
+                {
+                    provide: AuditService,
+                    useValue: mockAudit,
+                },
+            ],
+        }).compile();
+
+        service = module.get<ConfigurationService>(ConfigurationService);
+        prisma = module.get<PrismaService>(PrismaService);
+        audit = module.get<AuditService>(AuditService);
+
+        jest.clearAllMocks();
+    });
+
+    describe('createConfig', () => {
+        it('should create a new configuration', async () => {
+            const dto: CreateConfigDto = {
+                key: 'test.config',
+                value: 'test-value',
+                description: 'Test configuration',
+            };
+
+            mockPrisma.systemConfiguration.create.mockResolvedValue({
+                id: '1',
+                ...dto,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+
+            const result = await service.createConfig(dto, 'admin-1');
+
+            expect(result).toHaveProperty('key', dto.key);
+            expect(result).toHaveProperty('value', dto.value);
+            expect(mockAudit.logAction).toHaveBeenCalled();
+        });
+
+        it('should throw error if configuration key already exists', async () => {
+            const dto: CreateConfigDto = {
+                key: 'existing.key',
+                value: 'value',
+            };
+
+            mockPrisma.systemConfiguration.findUnique.mockResolvedValue({ id: '1' });
+
+            await expect(service.createConfig(dto, 'admin-1')).rejects.toThrow();
+        });
+    });
+
+    describe('getConfig', () => {
+        it('should return all configurations', async () => {
+            const configs = [
+                { id: '1', key: 'config1', value: 'value1' },
+                { id: '2', key: 'config2', value: 'value2' },
+            ];
+
+            mockPrisma.systemConfiguration.findMany.mockResolvedValue(configs);
+
+            const result = await service.getConfig({});
+
+            expect(result).toHaveLength(2);
+            expect(result[0].key).toBe('config1');
+        });
+
+        it('should return specific configuration by key', async () => {
+            const config = { id: '1', key: 'test.key', value: 'test-value' };
+
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue(config);
+
+            const result = await service.getConfig({ key: 'test.key' });
+
+            expect(result).toHaveLength(1);
+            expect(result[0].key).toBe('test.key');
+        });
+
+        it('should throw NotFoundException if configuration not found', async () => {
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue(null);
+
+            await expect(service.getConfig({ key: 'nonexistent' }, true)).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('updateConfig', () => {
+        it('should update existing configuration', async () => {
+            const dto: UpdateConfigDto = {
+                value: 'new-value',
+                description: 'Updated description',
+            };
+
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue({
+                id: '1',
+                key: 'test.key',
+                value: 'old-value',
+            });
+
+            mockPrisma.systemConfiguration.update.mockResolvedValue({
+                id: '1',
+                key: 'test.key',
+                ...dto,
+                updatedAt: new Date(),
+            });
+
+            const result = await service.updateConfig('test.key', dto, 'admin-1');
+
+            expect(result.value).toBe(dto.value);
+            expect(mockAudit.logAction).toHaveBeenCalled();
+        });
+
+        it('should throw NotFoundException if configuration not found', async () => {
+            const dto: UpdateConfigDto = { value: 'new-value' };
+
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue(null);
+
+            await expect(service.updateConfig('nonexistent', dto, 'admin-1')).rejects.toThrow(NotFoundException);
+        });
+
+        it('should not allow updating key field', async () => {
+            const dto: UpdateConfigDto = {
+                key: 'new.key', // Should not be allowed
+                value: 'new-value',
+            };
+
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue({
+                id: '1',
+                key: 'old.key',
+                value: 'old-value',
+            });
+
+            await service.updateConfig('old.key', dto, 'admin-1');
+
+            expect(mockPrisma.systemConfiguration.update).toHaveBeenCalledWith(
+                expect.not.objectContaining({
+                    data: expect.objectContaining({
+                        key: 'new.key',
+                    }),
+                }),
+            );
+        });
+    });
+
+    describe('deleteConfig', () => {
+        it('should delete configuration', async () => {
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue({
+                id: '1',
+                key: 'test.key',
+                value: 'test-value',
+            });
+
+            mockPrisma.systemConfiguration.delete.mockResolvedValue({
+                id: '1',
+                key: 'test.key',
+            });
+
+            await service.deleteConfig('test.key', 'admin-1');
+
+            expect(mockPrisma.systemConfiguration.delete).toHaveBeenCalled();
+            expect(mockAudit.logAction).toHaveBeenCalled();
+        });
+
+        it('should throw NotFoundException if configuration not found', async () => {
+            mockPrisma.systemConfiguration.findFirst.mockResolvedValue(null);
+
+            await expect(service.deleteConfig('nonexistent', 'admin-1')).rejects.toThrow(NotFoundException);
+        });
+    });
+});

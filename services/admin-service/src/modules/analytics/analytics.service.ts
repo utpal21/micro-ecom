@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { CacheService } from '../../infrastructure/cache/cache.service';
 import {
     AnalyticsQueryDto,
     TimePeriod,
@@ -9,7 +10,12 @@ import {
 
 @Injectable()
 export class AnalyticsService {
-    constructor(private prisma: PrismaService) { }
+    private readonly CACHE_TTL = 300; // 5 minutes
+
+    constructor(
+        private prisma: PrismaService,
+        private cache: CacheService,
+    ) { }
 
     /**
      * Get date range based on period
@@ -63,7 +69,43 @@ export class AnalyticsService {
     }
 
     /**
-     * Get dashboard metrics
+     * Get cached dashboard metric by name and period
+     */
+    private async getCachedMetric(
+        metricName: string,
+        startDate: Date,
+        endDate: Date,
+    ) {
+        const cacheKey = `analytics:${metricName}:${startDate.getTime()}-${endDate.getTime()}`;
+        const cached = await this.cache.get(cacheKey);
+
+        if (cached) {
+            return JSON.parse(cached);
+        }
+
+        // Try to get from DashboardMetric table
+        const metric = await this.prisma.dashboardMetric.findFirst({
+            where: {
+                metricName,
+                periodStart: { lte: startDate },
+                periodEnd: { gte: endDate },
+            },
+            orderBy: {
+                generatedAt: 'desc',
+            },
+        });
+
+        if (metric) {
+            // Cache the result
+            await this.cache.set(cacheKey, metric.metricData, { ttl: this.CACHE_TTL });
+            return metric.metricData;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get dashboard metrics from cached data
      */
     async getDashboardMetrics(query: AnalyticsQueryDto) {
         const { startDate, endDate } = this.getDateRange(
@@ -72,48 +114,36 @@ export class AnalyticsService {
             query.endDate,
         );
 
-        const [totalRevenue, totalOrders, totalCustomers, totalProducts, pendingOrders] =
-            await Promise.all([
-                this.prisma.order.aggregate({
-                    _sum: { totalAmount: true },
-                    where: {
-                        createdAt: { gte: startDate, lte: endDate },
-                        status: { in: ['completed', 'paid'] },
-                    },
-                }),
-                this.prisma.order.count({
-                    where: { createdAt: { gte: startDate, lte: endDate } },
-                }),
-                this.prisma.customer.count({
-                    where: { createdAt: { gte: startDate, lte: endDate } },
-                }),
-                this.prisma.product.count(),
-                this.prisma.order.count({
-                    where: { status: 'pending' },
-                }),
-            ]);
+        const cacheKey = `dashboard:metrics:${startDate.getTime()}-${endDate.getTime()}`;
+        const cached = await this.cache.get(cacheKey);
 
-        const averageOrderValue =
-            totalOrders > 0
-                ? (totalRevenue._sum.totalAmount || 0) / totalOrders
-                : 0;
+        if (cached) {
+            return JSON.parse(cached);
+        }
 
-        return {
-            totalRevenue: totalRevenue._sum.totalAmount || 0,
-            totalOrders,
-            averageOrderValue,
-            totalCustomers,
-            totalProducts,
-            pendingOrders,
+        // Get metrics from DashboardMetric table or return empty structure
+        const metricData = await this.getCachedMetric('dashboard_metrics', startDate, endDate);
+
+        const result = {
+            totalRevenue: metricData?.totalRevenue || 0,
+            totalOrders: metricData?.totalOrders || 0,
+            averageOrderValue: metricData?.averageOrderValue || 0,
+            totalCustomers: metricData?.totalCustomers || 0,
+            totalProducts: metricData?.totalProducts || 0,
+            pendingOrders: metricData?.pendingOrders || 0,
             period: {
                 startDate,
                 endDate,
             },
+            note: 'Data is aggregated from cached metrics. For real-time data, please check individual services.',
         };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
     }
 
     /**
-     * Get revenue analytics
+     * Get revenue analytics from cached data
      */
     async getRevenueAnalytics(query: AnalyticsQueryDto) {
         const { startDate, endDate } = this.getDateRange(
@@ -122,46 +152,29 @@ export class AnalyticsService {
             query.endDate,
         );
 
-        const [totalRevenue, revenueByStatus, dailyRevenue] = await Promise.all([
-            this.prisma.order.aggregate({
-                _sum: { totalAmount: true },
-                _avg: { totalAmount: true },
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                    status: { in: ['completed', 'paid'] },
-                },
-            }),
-            this.prisma.order.groupBy({
-                by: ['status'],
-                _sum: { totalAmount: true },
-                _count: true,
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                },
-            }),
-            this.prisma.$queryRaw`
-                SELECT 
-                    DATE(created_at) as date,
-                    SUM(total_amount) as revenue,
-                    COUNT(*) as orders
-                FROM orders
-                WHERE created_at >= ${startDate} AND created_at <= ${endDate}
-                    AND status IN ('completed', 'paid')
-                GROUP BY DATE(created_at)
-                ORDER BY date ASC
-            `,
-        ]);
+        const cacheKey = `analytics:revenue:${startDate.getTime()}-${endDate.getTime()}`;
+        const cached = await this.cache.get(cacheKey);
 
-        return {
-            total: totalRevenue._sum.totalAmount || 0,
-            average: totalRevenue._avg.totalAmount || 0,
-            byStatus: revenueByStatus,
-            daily: dailyRevenue,
+        if (cached) {
+            return JSON.parse(cached);
+        }
+
+        const metricData = await this.getCachedMetric('revenue_analytics', startDate, endDate);
+
+        const result = {
+            total: metricData?.total || 0,
+            average: metricData?.average || 0,
+            byStatus: metricData?.byStatus || [],
+            daily: metricData?.daily || [],
+            note: 'Data is aggregated from cached metrics.',
         };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
     }
 
     /**
-     * Get order analytics
+     * Get order analytics from cached data
      */
     async getOrderAnalytics(query: AnalyticsQueryDto) {
         const { startDate, endDate } = this.getDateRange(
@@ -170,206 +183,163 @@ export class AnalyticsService {
             query.endDate,
         );
 
-        const [totalOrders, ordersByStatus, dailyOrders, topStatus] = await Promise.all([
-            this.prisma.order.count({
-                where: { createdAt: { gte: startDate, lte: endDate } },
-            }),
-            this.prisma.order.groupBy({
-                by: ['status'],
-                _count: true,
-                _sum: { totalAmount: true },
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                },
-            }),
-            this.prisma.$queryRaw`
-                SELECT 
-                    DATE(created_at) as date,
-                    COUNT(*) as orders,
-                    SUM(total_amount) as revenue
-                FROM orders
-                WHERE created_at >= ${startDate} AND created_at <= ${endDate}
-                GROUP BY DATE(created_at)
-                ORDER BY date ASC
-            `,
-            this.prisma.order.groupBy({
-                by: ['status'],
-                _count: true,
-                orderBy: { _count: { status: 'desc' } },
-                take: 1,
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                },
-            }),
-        ]);
+        const cacheKey = `analytics:orders:${startDate.getTime()}-${endDate.getTime()}`;
+        const cached = await this.cache.get(cacheKey);
 
-        return {
-            total: totalOrders,
-            byStatus: ordersByStatus,
-            daily: dailyOrders,
-            mostCommonStatus: topStatus[0]?.status || null,
+        if (cached) {
+            return JSON.parse(cached);
+        }
+
+        const metricData = await this.getCachedMetric('order_analytics', startDate, endDate);
+
+        const result = {
+            total: metricData?.total || 0,
+            byStatus: metricData?.byStatus || [],
+            daily: metricData?.daily || [],
+            mostCommonStatus: metricData?.mostCommonStatus || null,
+            note: 'Data is aggregated from cached metrics.',
         };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
     }
 
     /**
-     * Get product analytics
+     * Get product analytics from cached data
      */
     async getProductAnalytics(query: AnalyticsQueryDto) {
-        const { startDate, endDate } = this.getDateRange(
-            query.period || TimePeriod.LAST_30_DAYS,
-            query.startDate,
-            query.endDate,
-        );
+        const cacheKey = `analytics:products:${Date.now()}`;
+        const cached = await this.cache.get(cacheKey);
 
-        const [totalProducts, lowStock, outOfStock, topSelling] = await Promise.all([
-            this.prisma.product.count(),
-            this.prisma.inventory.count({ where: { isLowStock: true } }),
-            this.prisma.inventory.count({ where: { stockLevel: 0 } }),
-            this.prisma.orderItem.groupBy({
-                by: ['productId'],
-                _sum: { quantity: true },
-                orderBy: { _sum: { quantity: 'desc' } },
-                take: 10,
-                where: {
-                    order: {
-                        createdAt: { gte: startDate, lte: endDate },
-                        status: { in: ['completed', 'paid'] },
-                    },
-                },
-            }),
-        ]);
+        if (cached) {
+            return JSON.parse(cached);
+        }
 
-        // Get product details for top selling
-        const topProductIds = topSelling.map((item) => item.productId);
-        const topProducts = await this.prisma.product.findMany({
-            where: { id: { in: topProductIds } },
-            select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-            },
-        });
+        const metricData = await this.getCachedMetric('product_analytics', new Date(0), new Date());
 
-        const topSellingWithDetails = topSelling.map((item) => ({
-            ...item,
-            product: topProducts.find((p) => p.id === item.productId),
-        }));
-
-        return {
-            totalProducts,
-            lowStock,
-            outOfStock,
-            topSelling: topSellingWithDetails,
+        const result = {
+            totalProducts: metricData?.totalProducts || 0,
+            lowStock: metricData?.lowStock || 0,
+            outOfStock: metricData?.outOfStock || 0,
+            topSelling: metricData?.topSelling || [],
+            note: 'Data is aggregated from cached metrics.',
         };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
     }
 
     /**
-     * Get customer analytics
+     * Get customer analytics from cached data
      */
     async getCustomerAnalytics(query: AnalyticsQueryDto) {
-        const { startDate, endDate } = this.getDateRange(
-            query.period || TimePeriod.LAST_30_DAYS,
-            query.startDate,
-            query.endDate,
-        );
+        const cacheKey = `analytics:customers:${Date.now()}`;
+        const cached = await this.cache.get(cacheKey);
 
-        const [totalCustomers, newCustomers, activeCustomers, highValueCustomers] =
-            await Promise.all([
-                this.prisma.customer.count(),
-                this.prisma.customer.count({
-                    where: { createdAt: { gte: startDate, lte: endDate } },
-                }),
-                this.prisma.customer.count({
-                    where: {
-                        totalOrders: { gt: 0 },
-                    },
-                }),
-                this.prisma.customer.count({
-                    where: {
-                        totalSpent: { gte: 1000 },
-                    },
-                }),
-            ]);
+        if (cached) {
+            return JSON.parse(cached);
+        }
 
-        return {
-            totalCustomers,
-            newCustomers,
-            activeCustomers,
-            highValueCustomers,
+        const metricData = await this.getCachedMetric('customer_analytics', new Date(0), new Date());
+
+        const result = {
+            totalCustomers: metricData?.totalCustomers || 0,
+            newCustomers: metricData?.newCustomers || 0,
+            activeCustomers: metricData?.activeCustomers || 0,
+            highValueCustomers: metricData?.highValueCustomers || 0,
+            note: 'Data is aggregated from cached metrics.',
         };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
     }
 
     /**
-     * Get top products
+     * Get top products from cached data
      */
     async getTopProducts(query: TopProductsQueryDto) {
-        const limit = query.limit || 10;
-        const startDate = query.startDate ? new Date(query.startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const endDate = query.endDate ? new Date(query.endDate) : new Date();
+        const cacheKey = `analytics:top-products:${query.limit || 10}`;
+        const cached = await this.cache.get(cacheKey);
 
-        const topProducts = await this.prisma.orderItem.groupBy({
-            by: ['productId'],
-            _sum: { quantity: true, price: true },
-            orderBy: { _sum: { quantity: 'desc' } },
-            take: limit,
-            where: {
-                order: {
-                    createdAt: { gte: startDate, lte: endDate },
-                    status: { in: ['completed', 'paid'] },
-                },
-            },
-        });
+        if (cached) {
+            return JSON.parse(cached);
+        }
 
-        const productIds = topProducts.map((item) => item.productId);
-        const products = await this.prisma.product.findMany({
-            where: { id: { in: productIds } },
-            select: {
-                id: true,
-                name: true,
-                sku: true,
-                category: true,
-                price: true,
-                images: true,
-            },
-        });
+        const metricData = await this.getCachedMetric('top_products', new Date(0), new Date());
 
-        return topProducts.map((item) => ({
-            ...item,
-            product: products.find((p) => p.id === item.productId),
-        }));
+        const result = {
+            products: metricData?.products || [],
+            limit: query.limit || 10,
+            note: 'Data is aggregated from cached metrics.',
+        };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result.products;
     }
 
     /**
-     * Get top customers
+     * Get top customers from cached data
      */
     async getTopCustomers(query: TopCustomersQueryDto) {
-        const limit = query.limit || 10;
-        const startDate = query.startDate ? new Date(query.startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const endDate = query.endDate ? new Date(query.endDate) : new Date();
+        const cacheKey = `analytics:top-customers:${query.limit || 10}`;
+        const cached = await this.cache.get(cacheKey);
 
-        const topCustomers = await this.prisma.customer.findMany({
-            orderBy: { totalSpent: 'desc' },
-            take: limit,
-            where: {
-                createdAt: { gte: startDate, lte: endDate },
-            },
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                totalOrders: true,
-                totalSpent: true,
-                createdAt: true,
-            },
-        });
+        if (cached) {
+            return JSON.parse(cached);
+        }
 
-        return topCustomers;
+        const metricData = await this.getCachedMetric('top_customers', new Date(0), new Date());
+
+        const result = {
+            customers: metricData?.customers || [],
+            limit: query.limit || 10,
+            note: 'Data is aggregated from cached metrics.',
+        };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result.customers;
     }
 
     /**
-     * Get comprehensive analytics
+     * Get admin-specific analytics (local data only)
+     */
+    async getAdminAnalytics() {
+        const cacheKey = 'analytics:admin:overview';
+        const cached = await this.cache.get(cacheKey);
+
+        if (cached) {
+            return JSON.parse(cached);
+        }
+
+        const [totalVendors, pendingApprovals, totalSettlements, pendingSettlements, totalBanners] =
+            await Promise.all([
+                this.prisma.vendor.count(),
+                this.prisma.productApproval.count({ where: { status: 'PENDING' } }),
+                this.prisma.vendorSettlement.count(),
+                this.prisma.vendorSettlement.count({ where: { status: 'PENDING' } }),
+                this.prisma.banner.count({ where: { status: 'ACTIVE' } }),
+            ]);
+
+        const result = {
+            vendors: {
+                total: totalVendors,
+                pendingApprovals,
+            },
+            settlements: {
+                total: totalSettlements,
+                pending: pendingSettlements,
+            },
+            content: {
+                activeBanners: totalBanners,
+            },
+        };
+
+        await this.cache.set(cacheKey, result, { ttl: this.CACHE_TTL });
+        return result;
+    }
+
+    /**
+     * Get comprehensive analytics combining cached and local data
      */
     async getComprehensiveAnalytics(query: AnalyticsQueryDto) {
         const { startDate, endDate } = this.getDateRange(
@@ -378,11 +348,12 @@ export class AnalyticsService {
             query.endDate,
         );
 
-        const [revenue, orders, products, customers] = await Promise.all([
+        const [revenue, orders, products, customers, adminAnalytics] = await Promise.all([
             this.getRevenueAnalytics(query),
             this.getOrderAnalytics(query),
             this.getProductAnalytics(query),
             this.getCustomerAnalytics(query),
+            this.getAdminAnalytics(),
         ]);
 
         return {
@@ -391,6 +362,54 @@ export class AnalyticsService {
             orders,
             products,
             customers,
+            admin: adminAnalytics,
         };
+    }
+
+    /**
+     * Refresh dashboard metrics (called by scheduled job or event consumer)
+     */
+    async refreshDashboardMetrics(metricName: string, periodStart: Date, periodEnd: Date, data: any) {
+        try {
+            // Check if metric exists
+            const existingMetric = await this.prisma.dashboardMetric.findFirst({
+                where: {
+                    metricName,
+                    periodStart: { lte: periodStart },
+                    periodEnd: { gte: periodEnd },
+                },
+            });
+
+            if (existingMetric) {
+                // Update existing metric
+                await this.prisma.dashboardMetric.update({
+                    where: { id: existingMetric.id },
+                    data: {
+                        metricData: data,
+                        generatedAt: new Date(),
+                    },
+                });
+            } else {
+                // Create new metric
+                await this.prisma.dashboardMetric.create({
+                    data: {
+                        metricName,
+                        periodStart,
+                        periodEnd,
+                        metricData: data,
+                        generatedAt: new Date(),
+                    },
+                });
+            }
+
+            // Invalidate cache
+            const cacheKey = `analytics:${metricName}:${periodStart.getTime()}-${periodEnd.getTime()}`;
+            await this.cache.invalidatePattern(cacheKey);
+
+            return { success: true };
+        } catch (error) {
+            console.error(`Failed to refresh dashboard metric ${metricName}:`, error);
+            return { success: false, error: error.message };
+        }
     }
 }

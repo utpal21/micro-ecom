@@ -1,0 +1,497 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { VendorService } from '../../../src/modules/vendor/vendor.service';
+import { PrismaService } from '../../../src/infrastructure/database/prisma.service';
+import { CacheService } from '../../../src/infrastructure/cache/cache.service';
+import { EventPublisherService } from '../../../src/events/event-publisher.service';
+import { AuditService } from '../../../src/modules/audit/audit.service';
+import { CreateVendorDto, UpdateVendorDto, VendorStatus } from '../../src/modules/vendor/dto/vendor.dto';
+
+describe('VendorService', () => {
+    let service: VendorService;
+    let prisma: PrismaService;
+    let cache: CacheService;
+    let eventPublisher: EventPublisherService;
+    let audit: AuditService;
+
+    const mockPrisma = {
+        vendor: {
+            findMany: jest.fn(),
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+            count: jest.fn(),
+        },
+        vendorSettlement: {
+            findMany: jest.fn(),
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            count: jest.fn(),
+        },
+        adminLog: {
+            create: jest.fn(),
+        },
+        $transaction: jest.fn(),
+    };
+
+    const mockCache = {
+        get: jest.fn(),
+        set: jest.fn(),
+        del: jest.fn(),
+        delPattern: jest.fn(),
+    };
+
+    const mockEventPublisher = {
+        publish: jest.fn(),
+    };
+
+    const mockAudit = {
+        createLog: jest.fn(),
+    };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                VendorService,
+                {
+                    provide: PrismaService,
+                    useValue: mockPrisma,
+                },
+                {
+                    provide: CacheService,
+                    useValue: mockCache,
+                },
+                {
+                    provide: EventPublisherService,
+                    useValue: mockEventPublisher,
+                },
+                {
+                    provide: AuditService,
+                    useValue: mockAudit,
+                },
+            ],
+        }).compile();
+
+        service = module.get<VendorService>(VendorService);
+        prisma = module.get<PrismaService>(PrismaService);
+        cache = module.get<CacheService>(CacheService);
+        eventPublisher = module.get<EventPublisherService>(EventPublisherService);
+        audit = module.get<AuditService>(AuditService);
+
+        jest.clearAllMocks();
+    });
+
+    describe('createVendor', () => {
+        it('should create a vendor successfully', async () => {
+            const dto: CreateVendorDto = {
+                businessName: 'Test Vendor',
+                contactPerson: 'John Doe',
+                email: 'john@testvendor.com',
+                phone: '+1234567890',
+                commissionRate: 10,
+                bankAccount: {
+                    bankName: 'Test Bank',
+                    accountNumber: '1234567890',
+                    routingNumber: '987654321',
+                },
+            };
+
+            const expectedVendor = {
+                id: '1',
+                ...dto,
+                status: VendorStatus.PENDING,
+                totalOrders: 0,
+                totalRevenue: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+
+            mockPrisma.vendor.create.mockResolvedValue(expectedVendor);
+
+            const result = await service.createVendor(dto, 'admin-1');
+
+            expect(result).toEqual(expectedVendor);
+            expect(mockPrisma.vendor.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    businessName: dto.businessName,
+                    contactPerson: dto.contactPerson,
+                    email: dto.email,
+                    phone: dto.phone,
+                    commissionRate: dto.commissionRate,
+                    bankAccount: dto.bankAccount,
+                }),
+            });
+            expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+                'vendor.created',
+                expect.objectContaining({ vendorId: expectedVendor.id }),
+            );
+            expect(mockAudit.createLog).toHaveBeenCalled();
+        });
+
+        it('should throw BadRequestException if email already exists', async () => {
+            const dto: CreateVendorDto = {
+                businessName: 'Test Vendor',
+                contactPerson: 'John Doe',
+                email: 'existing@test.com',
+                phone: '+1234567890',
+                commissionRate: 10,
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue({ id: '1' });
+
+            await expect(service.createVendor(dto, 'admin-1')).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+
+        it('should validate commission rate range', async () => {
+            const dto: CreateVendorDto = {
+                businessName: 'Test Vendor',
+                contactPerson: 'John Doe',
+                email: 'test@test.com',
+                phone: '+1234567890',
+                commissionRate: 150, // Invalid: must be 0-100
+            };
+
+            await expect(service.createVendor(dto, 'admin-1')).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+    });
+
+    describe('getVendors', () => {
+        it('should return paginated list of vendors', async () => {
+            const vendors = [
+                { id: '1', businessName: 'Vendor 1' },
+                { id: '2', businessName: 'Vendor 2' },
+            ];
+
+            mockPrisma.vendor.findMany.mockResolvedValue(vendors);
+            mockPrisma.vendor.count.mockResolvedValue(2);
+
+            const result = await service.getVendors({
+                page: 1,
+                limit: 10,
+            }, 'admin-1');
+
+            expect(result.data).toHaveLength(2);
+            expect(result.total).toBe(2);
+            expect(result.page).toBe(1);
+            expect(result.limit).toBe(10);
+        });
+
+        it('should filter vendors by status', async () => {
+            mockPrisma.vendor.findMany.mockResolvedValue([]);
+            mockPrisma.vendor.count.mockResolvedValue(0);
+
+            await service.getVendors({
+                status: VendorStatus.ACTIVE,
+                page: 1,
+                limit: 10,
+            }, 'admin-1');
+
+            expect(mockPrisma.vendor.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        status: VendorStatus.ACTIVE,
+                    }),
+                }),
+            );
+        });
+
+        it('should search vendors by business name or email', async () => {
+            mockPrisma.vendor.findMany.mockResolvedValue([]);
+            mockPrisma.vendor.count.mockResolvedValue(0);
+
+            await service.getVendors({
+                search: 'Test',
+                page: 1,
+                limit: 10,
+            }, 'admin-1');
+
+            expect(mockPrisma.vendor.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        OR: expect.arrayContaining([
+                            expect.objectContaining({ businessName: expect.anything() }),
+                            expect.objectContaining({ email: expect.anything() }),
+                        ]),
+                    }),
+                }),
+            );
+        });
+    });
+
+    describe('getVendorById', () => {
+        it('should return vendor by ID', async () => {
+            const vendor = {
+                id: '1',
+                businessName: 'Test Vendor',
+                email: 'test@test.com',
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue(vendor);
+
+            const result = await service.getVendorById('1', 'admin-1');
+
+            expect(result).toEqual(vendor);
+            expect(mockPrisma.vendor.findUnique).toHaveBeenCalledWith({
+                where: { id: '1' },
+            });
+        });
+
+        it('should throw NotFoundException if vendor not found', async () => {
+            mockPrisma.vendor.findUnique.mockResolvedValue(null);
+
+            await expect(
+                service.getVendorById('nonexistent', 'admin-1'),
+            ).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('updateVendor', () => {
+        it('should update vendor successfully', async () => {
+            const dto: UpdateVendorDto = {
+                businessName: 'Updated Vendor',
+            };
+
+            const existingVendor = {
+                id: '1',
+                businessName: 'Test Vendor',
+            };
+
+            const updatedVendor = {
+                ...existingVendor,
+                ...dto,
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue(existingVendor);
+            mockPrisma.vendor.update.mockResolvedValue(updatedVendor);
+
+            const result = await service.updateVendor('1', dto, 'admin-1');
+
+            expect(result.businessName).toBe('Updated Vendor');
+            expect(mockPrisma.vendor.update).toHaveBeenCalledWith({
+                where: { id: '1' },
+                data: dto,
+            });
+            expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+                'vendor.updated',
+                expect.objectContaining({ vendorId: '1' }),
+            );
+        });
+
+        it('should prevent updating critical fields for active vendors', async () => {
+            const existingVendor = {
+                id: '1',
+                status: VendorStatus.ACTIVE,
+                commissionRate: 10,
+            };
+
+            const dto: UpdateVendorDto = {
+                commissionRate: 15,
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue(existingVendor);
+
+            await expect(
+                service.updateVendor('1', dto, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('getVendorMetrics', () => {
+        it('should return vendor metrics for specified period', async () => {
+            const vendor = {
+                id: '1',
+                totalOrders: 100,
+                totalRevenue: 50000,
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue(vendor);
+
+            const result = await service.getVendorMetrics(
+                '1',
+                { startDate: '2024-01-01', endDate: '2024-01-31' },
+                'admin-1',
+            );
+
+            expect(result).toHaveProperty('vendorId', '1');
+            expect(result).toHaveProperty('totalOrders', 100);
+            expect(result).toHaveProperty('totalRevenue', 50000);
+        });
+
+        it('should use cache if available', async () => {
+            const cachedMetrics = {
+                vendorId: '1',
+                totalOrders: 100,
+                totalRevenue: 50000,
+            };
+
+            mockCache.get.mockResolvedValue(JSON.stringify(cachedMetrics));
+
+            const result = await service.getVendorMetrics(
+                '1',
+                { startDate: '2024-01-01', endDate: '2024-01-31' },
+                'admin-1',
+            );
+
+            expect(result).toEqual(cachedMetrics);
+            expect(mockPrisma.vendor.findUnique).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('createSettlement', () => {
+        it('should create settlement successfully', async () => {
+            const dto = {
+                vendorId: '1',
+                periodStartDate: '2024-01-01',
+                periodEndDate: '2024-01-31',
+                grossSales: 10000,
+                commission: 1000,
+                netPayable: 9000,
+            };
+
+            const vendor = {
+                id: '1',
+                businessName: 'Test Vendor',
+                totalRevenue: 50000,
+            };
+
+            const expectedSettlement = {
+                id: 'settlement-1',
+                ...dto,
+                status: 'PENDING',
+                createdAt: new Date(),
+            };
+
+            mockPrisma.vendor.findUnique.mockResolvedValue(vendor);
+            mockPrisma.vendorSettlement.create.mockResolvedValue(expectedSettlement);
+
+            const result = await service.createSettlement(dto, 'admin-1');
+
+            expect(result).toEqual(expectedSettlement);
+            expect(mockPrisma.vendorSettlement.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    vendorId: dto.vendorId,
+                    grossSales: dto.grossSales,
+                    commission: dto.commission,
+                    netPayable: dto.netPayable,
+                }),
+            });
+            expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+                'vendor.settlement.created',
+                expect.objectContaining({ settlementId: expectedSettlement.id }),
+            );
+        });
+
+        it('should validate settlement amounts', async () => {
+            const dto = {
+                vendorId: '1',
+                periodStartDate: '2024-01-01',
+                periodEndDate: '2024-01-31',
+                grossSales: 10000,
+                commission: 10000, // Invalid: commission cannot be >= gross sales
+                netPayable: 0,
+            };
+
+            await expect(
+                service.createSettlement(dto, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('processSettlement', () => {
+        it('should process settlement successfully', async () => {
+            const settlement = {
+                id: 'settlement-1',
+                vendorId: '1',
+                status: 'PENDING',
+                netPayable: 9000,
+            };
+
+            const vendor = {
+                id: '1',
+                businessName: 'Test Vendor',
+                totalRevenue: 50000,
+            };
+
+            const processedSettlement = {
+                ...settlement,
+                status: 'PAID',
+                settledAt: new Date(),
+            };
+
+            mockPrisma.vendorSettlement.findUnique.mockResolvedValue(settlement);
+            mockPrisma.vendor.findUnique.mockResolvedValue(vendor);
+            mockPrisma.$transaction.mockImplementation(async (callback) => {
+                return callback({ prisma: mockPrisma });
+            });
+
+            const result = await service.processSettlement('settlement-1', 'admin-1');
+
+            expect(result.status).toBe('PAID');
+            expect(result).toHaveProperty('settledAt');
+            expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+                'vendor.settlement.completed',
+                expect.objectContaining({ settlementId: 'settlement-1' }),
+            );
+        });
+
+        it('should throw error if settlement not pending', async () => {
+            const settlement = {
+                id: 'settlement-1',
+                status: 'PAID',
+            };
+
+            mockPrisma.vendorSettlement.findUnique.mockResolvedValue(settlement);
+
+            await expect(
+                service.processSettlement('settlement-1', 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('getSettlements', () => {
+        it('should return paginated list of settlements', async () => {
+            const settlements = [
+                { id: '1', vendorId: '1', amount: 1000 },
+                { id: '2', vendorId: '1', amount: 2000 },
+            ];
+
+            mockPrisma.vendorSettlement.findMany.mockResolvedValue(settlements);
+            mockPrisma.vendorSettlement.count.mockResolvedValue(2);
+
+            const result = await service.getSettlements({
+                page: 1,
+                limit: 10,
+            }, 'admin-1');
+
+            expect(result.data).toHaveLength(2);
+            expect(result.total).toBe(2);
+        });
+
+        it('should filter settlements by vendor and status', async () => {
+            mockPrisma.vendorSettlement.findMany.mockResolvedValue([]);
+            mockPrisma.vendorSettlement.count.mockResolvedValue(0);
+
+            await service.getSettlements({
+                vendorId: '1',
+                status: 'PENDING',
+                page: 1,
+                limit: 10,
+            }, 'admin-1');
+
+            expect(mockPrisma.vendorSettlement.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        vendorId: '1',
+                        status: 'PENDING',
+                    }),
+                }),
+            );
+        });
+    });
+});
