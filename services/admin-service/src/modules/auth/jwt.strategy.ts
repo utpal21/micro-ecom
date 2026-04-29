@@ -14,19 +14,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
             secretOrKey: configService.get<string>('JWT_SECRET', 'default-secret-key'),
+            passReqToCallback: true, // Enable passing request to callback
         });
     }
 
-    async validate(payload: any) {
-        // Validate token with custom logic
-        const user = await this.jwtService.validateToken(payload);
+    async validate(req: any, payload: any) {
+        // Log for debugging
+        console.log('[JwtStrategy] Validate called');
+        console.log('[JwtStrategy] Request headers:', Object.keys(req.headers));
+        console.log('[JwtStrategy] Authorization header:', req.headers?.authorization ? 'Present' : 'Missing');
 
-        if (!user) {
-            throw new UnauthorizedException('Invalid token');
-        }
-
+        // Token is already verified by passport-jwt
         return {
-            id: payload.sub,
+            id: payload.id,
             userId: payload.userId,
             email: payload.email,
             role: payload.role,

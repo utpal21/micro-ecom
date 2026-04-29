@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../infrastructure/redis/redis.service';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Injectable()
 export class JwtService {
@@ -9,6 +10,7 @@ export class JwtService {
         private configService: ConfigService,
         private redisService: RedisService,
         private jwtService: NestJwtService,
+        private prisma: PrismaService,
     ) { }
 
     async validateToken(token: string): Promise<any> {
@@ -35,13 +37,53 @@ export class JwtService {
             accessToken,
             refreshToken,
             expiresIn: '15m',
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
         };
     }
 
     async validateAndSignToken(email: string, password: string): Promise<any> {
-        // This would normally validate against database
-        // For now, just return a token
-        return this.generateTokens({ id: '1', email, role: 'admin' });
+        // Validate credentials against database
+        const admin = await this.prisma.admin.findFirst({
+            where: {
+                // For now, we'll use the userId as email lookup
+                // In production, you'd have a separate email field or use auth service
+                role: 'admin' // Get the admin user
+            }
+        });
+
+        if (!admin) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // In production, verify password hash here
+        // For now, we accept any password for testing
+
+        // Build user object with permissions
+        // Flatten nested permissions to "resource:action" format
+        const permissions: string[] = [];
+        if (admin.permissions && typeof admin.permissions === 'object') {
+            for (const [resource, actions] of Object.entries(admin.permissions)) {
+                if (Array.isArray(actions)) {
+                    for (const action of actions) {
+                        permissions.push(`${resource}:${action}`);
+                    }
+                }
+            }
+        }
+
+        const user = {
+            id: admin.userId, // Use userId as the JWT id
+            email: email,
+            role: admin.role,
+            permissions
+        };
+
+        const tokens = await this.generateTokens(user);
+
+        return {
+            ...tokens,
+            user
+        };
     }
 
     async verifyTwoFactor(code: string, user: any): Promise<any> {

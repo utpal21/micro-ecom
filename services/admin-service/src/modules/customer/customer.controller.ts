@@ -1,115 +1,114 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-
-interface BlockCustomerDto {
-    reason: string;
-    notes?: string;
-}
-
-interface CustomerQueryDto {
-    page?: number;
-    limit?: number;
-    search?: string;
-    status?: string;
-}
+import { Permissions } from '../../common/decorators/permissions.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CustomerService } from './customer.service';
+import {
+    CustomerQueryDto,
+    BlockCustomerDto,
+    CustomerAnalyticsDto,
+    ExportCustomersDto,
+    CustomerListResponseDto,
+    SingleCustomerResponseDto,
+    ApiResponseDto,
+    CustomerAnalyticsResponseDto,
+    ExportResponseDto,
+    OrderHistoryResponseDto,
+} from './dto/customer.dto';
 
 @ApiTags('customers')
 @Controller('customers')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class CustomerController {
+    constructor(private readonly customerService: CustomerService) { }
+
     @Get()
-    @ApiOperation({ summary: 'Get all customers' })
-    @ApiResponse({ status: 200, description: 'Customers retrieved successfully' })
-    @ApiQuery({ name: 'page', required: false, type: Number })
-    @ApiQuery({ name: 'limit', required: false, type: Number })
-    @ApiQuery({ name: 'search', required: false, type: String })
-    async getCustomers(@Query() query: CustomerQueryDto) {
-        return {
-            message: 'Customers retrieved',
-            data: [],
-            pagination: {
-                page: query.page || 1,
-                limit: query.limit || 10,
-                total: 0,
-                totalPages: 0
-            }
-        };
+    @ApiOperation({ summary: 'Get all customers with pagination and filtering' })
+    @ApiResponse({ status: 200, description: 'Customers retrieved successfully', type: CustomerListResponseDto })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    async getCustomers(@Query() query: CustomerQueryDto): Promise<CustomerListResponseDto> {
+        return this.customerService.findAll(query);
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Get customer by ID' })
-    @ApiResponse({ status: 200, description: 'Customer retrieved successfully' })
+    @ApiResponse({ status: 200, description: 'Customer retrieved successfully', type: SingleCustomerResponseDto })
     @ApiResponse({ status: 404, description: 'Customer not found' })
-    async getCustomer(@Param('id') id: string) {
-        return {
-            message: 'Customer retrieved',
-            data: null
-        };
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    async getCustomer(@Param('id') id: string): Promise<SingleCustomerResponseDto> {
+        return this.customerService.findOne(id);
     }
 
     @Get(':id/orders')
-    @ApiOperation({ summary: 'Get customer orders' })
-    @ApiResponse({ status: 200, description: 'Customer orders retrieved successfully' })
-    @ApiQuery({ name: 'page', required: false, type: Number })
-    async getCustomerOrders(@Param('id') id: string, @Query() query: { page?: number; limit?: number }) {
-        return {
-            message: 'Customer orders retrieved',
-            data: [],
-            pagination: {
-                page: query.page || 1,
-                limit: query.limit || 10,
-                total: 0,
-                totalPages: 0
-            }
-        };
+    @ApiOperation({ summary: 'Get customer order history' })
+    @ApiResponse({ status: 200, description: 'Order history retrieved successfully', type: OrderHistoryResponseDto })
+    @ApiResponse({ status: 404, description: 'Customer not found' })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    async getCustomerOrders(
+        @Param('id') id: string,
+        @Query() query: { page?: number; limit?: number },
+    ): Promise<OrderHistoryResponseDto> {
+        return this.customerService.getOrderHistory(id, query.page, query.limit);
     }
 
-    @Get(':id/analytics')
+    @Get('stats/analytics')
     @ApiOperation({ summary: 'Get customer analytics' })
-    @ApiResponse({ status: 200, description: 'Customer analytics retrieved successfully' })
-    async getCustomerAnalytics(@Param('id') id: string) {
-        return {
-            message: 'Customer analytics retrieved',
-            data: {
-                totalOrders: 0,
-                totalSpent: 0,
-                averageOrderValue: 0,
-                lastOrderDate: null
-            }
-        };
+    @ApiResponse({ status: 200, description: 'Analytics retrieved successfully', type: CustomerAnalyticsResponseDto })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    async getCustomerAnalytics(@Query() query: CustomerAnalyticsDto): Promise<CustomerAnalyticsResponseDto> {
+        const { startDate, endDate } = query;
+        return this.customerService.getAnalytics(
+            startDate ? new Date(startDate) : undefined,
+            endDate ? new Date(endDate) : undefined,
+        );
     }
 
     @Post(':id/block')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Block customer' })
-    @ApiResponse({ status: 200, description: 'Customer blocked successfully' })
-    async blockCustomer(@Param('id') id: string, @Body() blockDto: BlockCustomerDto) {
-        return {
-            message: 'Customer blocked',
-            data: null
-        };
+    @ApiOperation({ summary: 'Block a customer' })
+    @ApiResponse({ status: 200, description: 'Customer blocked successfully', type: SingleCustomerResponseDto })
+    @ApiResponse({ status: 404, description: 'Customer not found' })
+    @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    @Permissions('customers:block')
+    async blockCustomer(
+        @Param('id') id: string,
+        @Body() blockDto: BlockCustomerDto,
+        @CurrentUser('id') adminId: string,
+    ): Promise<SingleCustomerResponseDto> {
+        return this.customerService.block(id, blockDto, adminId);
     }
 
     @Post(':id/unblock')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Unblock customer' })
-    @ApiResponse({ status: 200, description: 'Customer unblocked successfully' })
-    async unblockCustomer(@Param('id') id: string, @Body() body: { notes?: string }) {
-        return {
-            message: 'Customer unblocked',
-            data: null
-        };
+    @ApiOperation({ summary: 'Unblock a customer' })
+    @ApiResponse({ status: 200, description: 'Customer unblocked successfully', type: SingleCustomerResponseDto })
+    @ApiResponse({ status: 404, description: 'Customer not found' })
+    @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    @Permissions('customers:block')
+    async unblockCustomer(
+        @Param('id') id: string,
+        @CurrentUser('id') adminId: string,
+    ): Promise<SingleCustomerResponseDto> {
+        return this.customerService.unblock(id, adminId);
     }
 
-    @Get('export')
+    @Post('export')
     @ApiOperation({ summary: 'Export customers' })
-    @ApiResponse({ status: 200, description: 'Customers exported successfully' })
-    async exportCustomers(@Query() query: { format: 'csv' | 'excel' }) {
-        return {
-            message: 'Customers exported',
-            data: null
-        };
+    @ApiResponse({ status: 200, description: 'Customers exported successfully', type: ExportResponseDto })
+    @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+    @ApiResponse({ status: 503, description: 'Customer service unavailable' })
+    @Permissions('customers:export')
+    async exportCustomers(
+        @Body() body: ExportCustomersDto,
+        @CurrentUser('id') adminId: string,
+    ): Promise<ExportResponseDto> {
+        const { startDate, endDate, format } = body;
+        return this.customerService.export(
+            startDate ? new Date(startDate) : undefined,
+            endDate ? new Date(endDate) : undefined,
+            format,
+        );
     }
 }

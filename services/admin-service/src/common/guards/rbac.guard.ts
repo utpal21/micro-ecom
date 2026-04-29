@@ -31,8 +31,13 @@ export class RbacGuard implements CanActivate {
             throw new ForbiddenException('Access denied');
         }
 
-        const userRole = user.role as AdminRole;
+        const userRole = user.role as string;
         const userPermissions = user.permissions || [];
+
+        // Allow admin role to access everything
+        if (userRole.toLowerCase() === 'admin') {
+            return true;
+        }
 
         // Check required permissions
         if (requiredPermissions) {

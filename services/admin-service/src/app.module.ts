@@ -4,6 +4,7 @@ import { DatabaseModule } from './infrastructure/database/database.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { RabbitMQModule } from './infrastructure/messaging/rabbitmq.module';
 import { CacheModule } from './infrastructure/cache/cache.module';
+import { ResilienceModule } from './common/resilience/resilience.module';
 import configuration from './infrastructure/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -32,6 +33,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     RedisModule,
     RabbitMQModule,
     CacheModule,
+    ResilienceModule,
 
     // Core Services
     EventsModule,
