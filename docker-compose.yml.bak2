@@ -570,7 +570,6 @@ services:
       # Persist database data
       - postgres-auth-data:/var/lib/postgresql/data
       # Custom PostgreSQL configuration
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       # Initialization scripts
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
@@ -604,7 +603,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-order-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
@@ -637,7 +635,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-inventory-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
@@ -670,7 +667,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-payment-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
@@ -703,7 +699,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-admin-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend

@@ -4,12 +4,6 @@ FROM node:20-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Proxy build arguments to override environment variables
-ARG HTTP_PROXY=""
-ARG HTTPS_PROXY=""
-ARG http_proxy=""
-ARG https_proxy=""
-
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -39,12 +33,6 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Set working directory
 WORKDIR /app
-
-# Proxy build arguments to override environment variables
-ARG HTTP_PROXY=""
-ARG HTTPS_PROXY=""
-ARG http_proxy=""
-ARG https_proxy=""
 
 # Copy package files and node_modules from builder
 COPY --from=builder /app/package*.json ./

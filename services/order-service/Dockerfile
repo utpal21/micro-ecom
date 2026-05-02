@@ -3,6 +3,12 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Proxy build arguments to override environment variables
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+ARG http_proxy=""
+ARG https_proxy=""
+
 # Install pnpm matching the workspace lockfile
 RUN npm install -g pnpm@10.8.0
 

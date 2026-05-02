@@ -34,7 +34,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 
 **Completed Phases:** `8 / 12`
 **Current Phase:** `Phase 9a - Admin API Service (NestJS 11)`
-**Next Phase:** `Phase 9b - Admin Frontend (React 18 + Vite)`
+**Next Phase:** `Phase 9b - Admin Frontend (React + Vite)`
 
 ---
 
@@ -302,16 +302,16 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 
 ## Phase 9b: Admin Frontend (React 18 + Vite)
 **Goal:** Admin Dashboard UI consuming Admin API Service (Port: 8008).
-**Note:** Using React 18 + Vite instead of Next.js for simpler architecture - admin dashboards don't need SSR/SEO.
-1. **Setup:** Initialize React 18 with Vite, TypeScript, TailwindCSS, and UI component library (shadcn/ui or similar).
+**Note:** Using React 19 + Vite instead of Next.js for simpler architecture - admin dashboards don't need SSR/SEO.
+1. **Setup:** Initialize React 19 with Vite, TypeScript, TailwindCSS, and UI component library (shadcn/ui or similar).
 2. **Authentication:**
    - Implement auth client with httpOnly cookies for JWT storage
    - JWT validation via Admin API Service endpoints
    - Protected routes using React Router v6 guards
    - Token refresh mechanism with axios interceptors
 3. **State Management:**
-   - TanStack React Query (v5) for server state (API calls)
-   - Zustand for UI state (modals, filters, sidebar)
+   - server state (API calls)
+   - UI state (modals, filters, sidebar)
    - React Context for auth state
 4. **Routing & Layout:**
    - React Router v6 for client-side routing

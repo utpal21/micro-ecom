@@ -533,7 +533,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
       - "-c"
@@ -570,9 +569,7 @@ services:
       # Persist database data
       - postgres-auth-data:/var/lib/postgresql/data
       # Custom PostgreSQL configuration
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       # Initialization scripts
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -593,7 +590,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -604,8 +600,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-order-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -626,7 +620,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -637,8 +630,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-inventory-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -659,7 +650,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -670,8 +660,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-payment-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -692,7 +680,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -703,8 +690,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-admin-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -752,7 +737,6 @@ services:
       - mongosh --host mongodb:27017 /scripts/init-replica.js
     restart: "no"
     volumes:
-      - ./infrastructure/docker/mongodb/init-replica.js:/scripts/init-replica.js:ro
     networks:
       - emp-backend
 
@@ -773,7 +757,6 @@ services:
       start_period: 20s
     volumes:
       - redis-master-data:/data
-      - ./infrastructure/docker/redis/redis-master.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -781,9 +764,7 @@ services:
   # ============================================
   # Redis Replica 1
   # ============================================
-  redis-replica-1:
     image: redis:7.2-alpine
-    container_name: emp-redis-replica-1
     depends_on:
       redis-master:
         condition: service_healthy
@@ -795,8 +776,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - redis-replica-1-data:/data
-      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -804,9 +783,7 @@ services:
   # ============================================
   # Redis Replica 2
   # ============================================
-  redis-replica-2:
     image: redis:7.2-alpine
-    container_name: emp-redis-replica-2
     depends_on:
       redis-master:
         condition: service_healthy
@@ -818,8 +795,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - redis-replica-2-data:/data
-      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -848,7 +823,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -877,7 +851,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -906,7 +879,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -968,9 +940,5 @@ volumes:
   redis-master-data:
     driver: local
     name: emp-redis-master-data
-  redis-replica-1-data:
     driver: local
-    name: emp-redis-replica-1-data
-  redis-replica-2-data:
     driver: local
-    name: emp-redis-replica-2-data

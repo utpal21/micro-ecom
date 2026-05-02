@@ -69,6 +69,12 @@ services:
       context: .
       dockerfile: ./services/order-service/Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
+
     container_name: emp-order-service
     ports:
       - "${ORDER_SERVICE_PORT:-8003}:8003"
@@ -141,6 +147,12 @@ services:
       context: ./services/inventory-service
       dockerfile: Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
+
     container_name: emp-inventory-service
     ports:
       - "${INVENTORY_SERVICE_PORT:-8004}:8004"
@@ -219,6 +231,12 @@ services:
       context: ./services/product-service
       dockerfile: Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
+
     container_name: emp-product-service
     ports:
       - "${PRODUCT_SERVICE_PORT:-8002}:8002"
@@ -278,6 +296,12 @@ services:
       context: ./services/payment-service
       dockerfile: Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
+
     container_name: emp-payment-service
     ports:
       - "${PAYMENT_SERVICE_PORT:-8005}:3000"
@@ -353,6 +377,12 @@ services:
       context: .
       dockerfile: ./services/notification-service/Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
+
     container_name: emp-notification-service
     ports:
       - "${NOTIFICATION_SERVICE_PORT:-8006}:8006"
@@ -420,6 +450,11 @@ services:
       context: ./services/admin-service
       dockerfile: Dockerfile
       target: production
+      args:
+        - HTTP_PROXY=
+        - HTTPS_PROXY=
+        - http_proxy=
+        - https_proxy=
     container_name: emp-admin-service
     ports:
       - "${ADMIN_SERVICE_PORT:-8007}:8007"
@@ -528,7 +563,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
       - "-c"
@@ -565,9 +599,7 @@ services:
       # Persist database data
       - postgres-auth-data:/var/lib/postgresql/data
       # Custom PostgreSQL configuration
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       # Initialization scripts
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -588,7 +620,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -599,8 +630,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-order-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -621,7 +650,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -632,8 +660,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-inventory-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -654,7 +680,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -665,8 +690,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-payment-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -687,7 +710,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "config_file=/etc/postgresql/postgresql.conf"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -698,8 +720,6 @@ services:
       start_period: 30s
     volumes:
       - postgres-admin-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -744,10 +764,10 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - mongosh --host mongodb:27017 /scripts/init-replica.js
+      - >
+        mongosh --host mongodb:27017 --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: 'emp-rs0', members: [{_id: 0, host: 'mongodb:27017'}]}) }"
     restart: "no"
-    volumes:
-      - ./infrastructure/docker/mongodb/init-replica.js:/scripts/init-replica.js:ro
+    volumes: []
     networks:
       - emp-backend
 
@@ -768,7 +788,6 @@ services:
       start_period: 20s
     volumes:
       - redis-master-data:/data
-      - ./infrastructure/docker/redis/redis-master.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -791,7 +810,6 @@ services:
       start_period: 20s
     volumes:
       - redis-replica-1-data:/data
-      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -814,7 +832,6 @@ services:
       start_period: 20s
     volumes:
       - redis-replica-2-data:/data
-      - ./infrastructure/docker/redis/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - emp-backend
     restart: unless-stopped
@@ -842,8 +859,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    volumes: []
     networks:
       - emp-backend
     restart: unless-stopped
@@ -871,8 +887,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    volumes: []
     networks:
       - emp-backend
     restart: unless-stopped
@@ -900,8 +915,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
-      - ./infrastructure/docker/redis/sentinel.conf:/etc/redis-source/sentinel.conf:ro
+    volumes: []
     networks:
       - emp-backend
     restart: unless-stopped

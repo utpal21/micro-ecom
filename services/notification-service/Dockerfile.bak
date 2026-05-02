@@ -3,12 +3,6 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Proxy build arguments to override environment variables
-ARG HTTP_PROXY=""
-ARG HTTPS_PROXY=""
-ARG http_proxy=""
-ARG https_proxy=""
-
 # Copy workspace configuration and shared packages
 COPY pnpm-workspace.yaml ./
 COPY packages/ ./packages/
@@ -40,12 +34,6 @@ RUN addgroup -g 1001 -S notification && \
     adduser -S -u 1001 -G notification notification
 
 WORKDIR /app
-
-# Proxy build arguments to override environment variables
-ARG HTTP_PROXY=""
-ARG HTTPS_PROXY=""
-ARG http_proxy=""
-ARG https_proxy=""
 
 # Copy workspace configuration and packages
 COPY pnpm-workspace.yaml ./

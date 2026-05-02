@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Stripe from 'stripe';
+import Stripe, { Stripe as StripeInstance } from 'stripe';
 import {
     IPaymentGateway,
     GatewayInitiationRequest,
@@ -11,7 +11,7 @@ import {
 @Injectable()
 export class StripeGateway implements IPaymentGateway {
     private readonly logger = new Logger(StripeGateway.name);
-    private stripe: Stripe;
+    private stripe: StripeInstance;
 
     constructor(private configService: ConfigService) {
         const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -24,7 +24,7 @@ export class StripeGateway implements IPaymentGateway {
         }
 
         this.stripe = new Stripe(secretKey || 'sk_test_placeholder', {
-            apiVersion: '2024-11-20.acacia',
+            apiVersion: '2026-04-22.dahlia',
         });
     }
 
@@ -116,10 +116,10 @@ export class StripeGateway implements IPaymentGateway {
                     success: true,
                     gatewayStatus: 'COMPLETED',
                     gatewayRef: session.payment_intent as string,
-                    amount: session.amount_total / 100,
+                    amount: (session.amount_total || 0) / 100,
                     transactionId: session.payment_intent as string,
                 };
-            } else if (session.status === 'cancelled') {
+            } else if (!session.status || (session.status as string) === 'canceled' || (session.status as string) === 'cancelled') {
                 return {
                     success: false,
                     gatewayStatus: 'CANCELLED',
@@ -183,7 +183,7 @@ export class StripeGateway implements IPaymentGateway {
     }
 
     private async handleCheckoutSessionCompleted(
-        session: Stripe.Checkout.Session,
+        session: any,
     ): Promise<void> {
         this.logger.log(
             `Checkout session completed: ${session.id}, payment status: ${session.payment_status}`,
@@ -192,7 +192,7 @@ export class StripeGateway implements IPaymentGateway {
     }
 
     private async handleAsyncPaymentSucceeded(
-        session: Stripe.Checkout.Session,
+        session: any,
     ): Promise<void> {
         this.logger.log(
             `Async payment succeeded: ${session.id}, payment status: ${session.payment_status}`,
@@ -201,7 +201,7 @@ export class StripeGateway implements IPaymentGateway {
     }
 
     private async handleAsyncPaymentFailed(
-        session: Stripe.Checkout.Session,
+        session: any,
     ): Promise<void> {
         this.logger.log(
             `Async payment failed: ${session.id}, payment status: ${session.payment_status}`,

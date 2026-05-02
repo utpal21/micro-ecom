@@ -9,6 +9,11 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install all dependencies with legacy peer deps
+# Use build args to control proxy settings
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+ARG http_proxy=""
+ARG https_proxy=""
 RUN npm install --legacy-peer-deps && \
     npm cache clean --force
 
