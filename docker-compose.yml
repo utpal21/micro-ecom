@@ -69,12 +69,6 @@ services:
       context: .
       dockerfile: ./services/order-service/Dockerfile
       target: production
-      args:
-        - HTTP_PROXY=
-        - HTTPS_PROXY=
-        - http_proxy=
-        - https_proxy=
-
     container_name: emp-order-service
     ports:
       - "${ORDER_SERVICE_PORT:-8003}:8003"
@@ -147,12 +141,6 @@ services:
       context: ./services/inventory-service
       dockerfile: Dockerfile
       target: production
-      args:
-        - HTTP_PROXY=
-        - HTTPS_PROXY=
-        - http_proxy=
-        - https_proxy=
-
     container_name: emp-inventory-service
     ports:
       - "${INVENTORY_SERVICE_PORT:-8004}:8004"
@@ -231,12 +219,6 @@ services:
       context: ./services/product-service
       dockerfile: Dockerfile
       target: production
-      args:
-        - HTTP_PROXY=
-        - HTTPS_PROXY=
-        - http_proxy=
-        - https_proxy=
-
     container_name: emp-product-service
     ports:
       - "${PRODUCT_SERVICE_PORT:-8002}:8002"
@@ -296,12 +278,6 @@ services:
       context: ./services/payment-service
       dockerfile: Dockerfile
       target: production
-      args:
-        - HTTP_PROXY=
-        - HTTPS_PROXY=
-        - http_proxy=
-        - https_proxy=
-
     container_name: emp-payment-service
     ports:
       - "${PAYMENT_SERVICE_PORT:-8005}:3000"
@@ -377,12 +353,6 @@ services:
       context: .
       dockerfile: ./services/notification-service/Dockerfile
       target: production
-      args:
-        - HTTP_PROXY=
-        - HTTPS_PROXY=
-        - http_proxy=
-        - https_proxy=
-
     container_name: emp-notification-service
     ports:
       - "${NOTIFICATION_SERVICE_PORT:-8006}:8006"
@@ -764,10 +734,9 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - >
-        mongosh --host mongodb:27017 --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: 'emp-rs0', members: [{_id: 0, host: 'mongodb:27017'}]}) }"
+      - mongosh --host mongodb:27017 /scripts/init-replica.js
     restart: "no"
-    volumes: []
+    volumes:
     networks:
       - emp-backend
 
@@ -795,9 +764,7 @@ services:
   # ============================================
   # Redis Replica 1
   # ============================================
-  redis-replica-1:
     image: redis:7.2-alpine
-    container_name: emp-redis-replica-1
     depends_on:
       redis-master:
         condition: service_healthy
@@ -809,7 +776,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - redis-replica-1-data:/data
     networks:
       - emp-backend
     restart: unless-stopped
@@ -817,9 +783,7 @@ services:
   # ============================================
   # Redis Replica 2
   # ============================================
-  redis-replica-2:
     image: redis:7.2-alpine
-    container_name: emp-redis-replica-2
     depends_on:
       redis-master:
         condition: service_healthy
@@ -831,7 +795,6 @@ services:
       retries: 10
       start_period: 20s
     volumes:
-      - redis-replica-2-data:/data
     networks:
       - emp-backend
     restart: unless-stopped
@@ -859,7 +822,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes: []
+    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -887,7 +850,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes: []
+    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -915,7 +878,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes: []
+    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -977,9 +940,5 @@ volumes:
   redis-master-data:
     driver: local
     name: emp-redis-master-data
-  redis-replica-1-data:
     driver: local
-    name: emp-redis-replica-1-data
-  redis-replica-2-data:
     driver: local
-    name: emp-redis-replica-2-data

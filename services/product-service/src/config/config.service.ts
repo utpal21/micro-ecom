@@ -37,6 +37,9 @@ export class ConfigService extends NestConfigService implements OnModuleInit {
             JWT_AUDIENCE: Joi.string().required(),
             JWKS_URL: Joi.string().uri().required(),
 
+            // Service-to-Service Auth
+            ADMIN_SERVICE_PUBLIC_KEY: Joi.string().optional().allow(''),
+
             // OpenTelemetry
             OTEL_SERVICE_NAME: Joi.string().default('product-service'),
             OTEL_SERVICE_VERSION: Joi.string().default('1.0.0'),
@@ -116,6 +119,10 @@ export class ConfigService extends NestConfigService implements OnModuleInit {
     }
     get jwksUrl(): string {
         return this.get<string>('JWKS_URL')!;
+    }
+    get adminServicePublicKey(): string | null {
+        const key = this.get<string>('ADMIN_SERVICE_PUBLIC_KEY');
+        return key && key !== '' ? key : null;
     }
 
     // OpenTelemetry

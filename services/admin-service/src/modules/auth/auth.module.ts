@@ -13,12 +13,15 @@ import { AuthController } from './auth.controller';
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.registerAsync({
             imports: [ConfigModule],
-            useFactory: async (configService: ConfigService) => ({
-                secret: configService.get<string>('JWT_SECRET', 'default-secret-key'),
-                signOptions: {
-                    expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
-                },
-            }),
+            useFactory: async (configService: ConfigService) => {
+                const jwtSecret = configService.get<string>('JWT_SECRET', 'dev-jwt-secret-key-change-in-production');
+                return {
+                    secret: jwtSecret,
+                    signOptions: {
+                        expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
+                    },
+                };
+            },
             inject: [ConfigService],
         }),
         RedisModule,

@@ -1,36 +1,31 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from './jwt.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor(
-        private configService: ConfigService,
-        private jwtService: JwtService,
-    ) {
+    constructor(private configService: ConfigService) {
+        const jwtSecret = configService.get<string>('JWT_SECRET', 'dev-jwt-secret-key-change-in-production');
+
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: configService.get<string>('JWT_SECRET', 'default-secret-key'),
-            passReqToCallback: true, // Enable passing request to callback
+            secretOrKey: jwtSecret,
         });
     }
 
-    async validate(req: any, payload: any) {
-        // Log for debugging
-        console.log('[JwtStrategy] Validate called');
-        console.log('[JwtStrategy] Request headers:', Object.keys(req.headers));
-        console.log('[JwtStrategy] Authorization header:', req.headers?.authorization ? 'Present' : 'Missing');
-
-        // Token is already verified by passport-jwt
+    async validate(payload: any) {
+        // Token is already verified by passport-jwt using the configured secret
         return {
             id: payload.id,
-            userId: payload.userId,
+            userId: payload.userId || payload.id,
             email: payload.email,
             role: payload.role,
             permissions: payload.permissions || [],
+            // Add service context if this is a service token
+            isService: !!payload.service,
+            serviceName: payload.serviceName,
         };
     }
 }

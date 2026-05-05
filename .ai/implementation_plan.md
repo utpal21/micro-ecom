@@ -33,8 +33,7 @@ Implementation standards and coding conventions are defined in `.ai/engineering_
 | | Phase 12: Deployment Readiness & Observability | NOT STARTED | Pending |
 
 **Completed Phases:** `8 / 12`
-**Current Phase:** `Phase 9a - Admin API Service (NestJS 11)`
-**Next Phase:** `Phase 9b - Admin Frontend (React + Vite)`
+**Current Phase:** `Phase 9b - Admin Frontend (React + Vite)`
 
 ---
 

@@ -5,6 +5,7 @@ import { ProductService } from './product.service';
 import { ProductController } from './product.controller';
 import { AuditModule } from '../audit/audit.module';
 import { DatabaseModule } from '../../infrastructure/database/database.module';
+import { ServiceAuthModule } from '../../infrastructure/auth/auth.module';
 
 @Module({
     imports: [
@@ -12,6 +13,7 @@ import { DatabaseModule } from '../../infrastructure/database/database.module';
         ConfigModule,
         AuditModule,
         DatabaseModule,
+        ServiceAuthModule,
     ],
     controllers: [ProductController],
     providers: [ProductService],

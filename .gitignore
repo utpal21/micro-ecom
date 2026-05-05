@@ -2,6 +2,11 @@
 .env
 .env.*
 !.env.example
+
+# RSA keys and secrets
+secrets/
+*.pem
+*.key
 node_modules/
 .pnpm-store/
 dist/

@@ -18,6 +18,7 @@ import { OrderModule } from './modules/order/order.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ServiceAuthModule } from './infrastructure/auth/auth.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     RabbitMQModule,
     CacheModule,
     ResilienceModule,
+    ServiceAuthModule,
 
     // Core Services
     EventsModule,

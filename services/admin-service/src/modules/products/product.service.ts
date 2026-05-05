@@ -16,6 +16,7 @@ import {
 } from './dto/product.dto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ServiceTokenClient } from '../../infrastructure/auth/service-token-client.service';
 
 interface ProductServiceResponse<T = any> {
     success: boolean;
@@ -35,6 +36,7 @@ export class ProductService {
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
         private readonly auditService: AuditService,
+        private readonly serviceTokenClient: ServiceTokenClient,
         @Inject(REQUEST) private readonly request: Request,
     ) {
         this.productServiceUrl = this.configService.get<string>(
@@ -44,19 +46,21 @@ export class ProductService {
     }
 
     /**
-     * Get headers with Authorization token forwarded from incoming request
+     * Get headers with Authorization token for service-to-service communication
      */
-    private getAuthHeaders(): Record<string, string> {
+    private async getAuthHeaders(): Promise<Record<string, string>> {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
 
-        // Forward Authorization header if present
-        const authHeader = this.request.headers?.authorization;
-        this.logger.log(`[getAuthHeaders] Auth header present: ${!!authHeader}`);
-        if (authHeader) {
-            headers['Authorization'] = authHeader as string;
-            this.logger.log(`[getAuthHeaders] Authorization header set: Bearer ${authHeader.substring(0, 20)}...`);
+        try {
+            // Get service token for product-service
+            const serviceToken = await this.serviceTokenClient.getServiceToken('product-service');
+            headers['Authorization'] = `Bearer ${serviceToken}`;
+            this.logger.debug(`[getAuthHeaders] Service token obtained for product-service`);
+        } catch (error) {
+            this.logger.error(`[getAuthHeaders] Failed to get service token`, error);
+            // Continue without service token - service may handle anonymous requests
         }
 
         return headers;
@@ -85,7 +89,7 @@ export class ProductService {
                 this.httpService.get<ProductServiceResponse<any[]>>(`${this.productServiceUrl}/products/search`, {
                     params,
                     timeout: this.timeout,
-                    headers: this.getAuthHeaders(),
+                    headers: await this.getAuthHeaders(),
                 })
             );
 
@@ -119,7 +123,7 @@ export class ProductService {
             const response = await firstValueFrom(
                 this.httpService.get<ProductServiceResponse<any>>(`${this.productServiceUrl}/products/${id}`, {
                     timeout: this.timeout,
-                    headers: this.getAuthHeaders(),
+                    headers: await this.getAuthHeaders(),
                 })
             );
 
@@ -148,7 +152,7 @@ export class ProductService {
                     createDto,
                     {
                         timeout: this.timeout,
-                        headers: this.getAuthHeaders(),
+                        headers: await this.getAuthHeaders(),
                     }
                 )
             );
@@ -190,7 +194,7 @@ export class ProductService {
                     updateDto,
                     {
                         timeout: this.timeout,
-                        headers: this.getAuthHeaders(),
+                        headers: await this.getAuthHeaders(),
                     }
                 )
             );
@@ -230,7 +234,7 @@ export class ProductService {
             await firstValueFrom(
                 this.httpService.delete(`${this.productServiceUrl}/products/${id}`, {
                     timeout: this.timeout,
-                    headers: this.getAuthHeaders(),
+                    headers: await this.getAuthHeaders(),
                 })
             );
 
@@ -271,7 +275,7 @@ export class ProductService {
                     { status: ProductStatus.ACTIVE },
                     {
                         timeout: this.timeout,
-                        headers: this.getAuthHeaders(),
+                        headers: await this.getAuthHeaders(),
                     }
                 )
             );
@@ -325,7 +329,7 @@ export class ProductService {
                     { status: ProductStatus.REJECTED },
                     {
                         timeout: this.timeout,
-                        headers: this.getAuthHeaders(),
+                        headers: await this.getAuthHeaders(),
                     }
                 )
             );

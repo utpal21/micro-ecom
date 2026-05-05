@@ -23,7 +23,7 @@ import type {
 // ============================================================================
 
 const baseQuery = fetchBaseQuery({
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001',
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8007/api/v1',
     prepareHeaders: (headers, { getState }) => {
         // Get token from auth state
         const token = (getState() as RootState).auth.token;
@@ -70,6 +70,41 @@ export const apiSlice = createApi({
                 method: 'POST',
                 body: credentials,
             }),
+            transformResponse: (response: {
+                accessToken: string;
+                refreshToken: string;
+                expiresAt: string;
+                user: {
+                    id: string;
+                    email: string;
+                    role: string;
+                    permissions: string[];
+                };
+            }) => {
+                // Transform Admin Service response to match frontend expectations
+                return {
+                    user: {
+                        id: response.user.id,
+                        email: response.user.email,
+                        name: response.user.email,
+                        roles: [{ id: '1', name: response.user.role }],
+                        permissions: response.user.permissions.map((perm) => ({
+                            id: perm,
+                            name: perm,
+                            description: perm,
+                        })),
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                    token: response.accessToken,
+                    refreshToken: response.refreshToken,
+                    permissions: response.user.permissions.map((perm) => ({
+                        id: perm,
+                        name: perm,
+                        description: perm,
+                    })),
+                };
+            },
             invalidatesTags: ['Auth'],
         }),
 

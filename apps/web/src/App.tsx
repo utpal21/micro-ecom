@@ -13,6 +13,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { MainLayout } from './components/layout';
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
+import ProductsPage from './pages/products/ProductsPage';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -27,7 +28,6 @@ const queryClient = new QueryClient({
 
 // Placeholder components for routes (will be implemented later)
 const VendorsPage = () => <div>Vendors Page - Coming Soon</div>;
-const ProductsPage = () => <div>Products Page - Coming Soon</div>;
 const OrdersPage = () => <div>Orders Page - Coming Soon</div>;
 const UsersPage = () => <div>Users Page - Coming Soon</div>;
 const SettingsPage = () => <div>Settings Page - Coming Soon</div>;

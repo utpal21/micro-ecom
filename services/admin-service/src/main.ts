@@ -2,12 +2,21 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import * as express from 'express';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { traceContextMiddleware } from './common/middleware/trace-context.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable default bodyParser to use custom one with larger limit
+  });
+
+  // Add custom body parser with larger payload size for image uploads
+  app.use(
+    express.json({ limit: '10mb' }),
+    express.urlencoded({ limit: '10mb', extended: true }),
+  );
 
   // Swagger Configuration (must be BEFORE global prefix)
   const config = new DocumentBuilder()
