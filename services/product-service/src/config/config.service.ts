@@ -39,6 +39,7 @@ export class ConfigService extends NestConfigService implements OnModuleInit {
 
             // Service-to-Service Auth
             ADMIN_SERVICE_PUBLIC_KEY: Joi.string().optional().allow(''),
+            ADMIN_SERVICE_PUBLIC_KEY_PATH: Joi.string().optional().allow(''),
 
             // OpenTelemetry
             OTEL_SERVICE_NAME: Joi.string().default('product-service'),
@@ -123,6 +124,10 @@ export class ConfigService extends NestConfigService implements OnModuleInit {
     get adminServicePublicKey(): string | null {
         const key = this.get<string>('ADMIN_SERVICE_PUBLIC_KEY');
         return key && key !== '' ? key : null;
+    }
+    get adminServicePublicKeyPath(): string | null {
+        const keyPath = this.get<string>('ADMIN_SERVICE_PUBLIC_KEY_PATH');
+        return keyPath && keyPath !== '' ? keyPath : null;
     }
 
     // OpenTelemetry

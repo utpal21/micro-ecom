@@ -70,23 +70,27 @@ export class ProductService {
         const startTime = Date.now();
 
         try {
-            // Use search endpoint as product service doesn't have /products list endpoint
-            // Search endpoint with empty query returns all products
-            const params = {
-                q: query.search || '', // Query parameter for search
-                page: query.page || 1,
-                limit: query.limit || 10,
-                category: query.categoryId,
-                vendor: query.vendorId,
-                status: query.status,
-                sortBy: query.sortBy || 'createdAt',
-                sortOrder: query.sortOrder || 'desc',
-            };
+            const page = query.page || 1;
+            const limit = query.limit || 10;
+            const hasSearch = Boolean(query.search?.trim());
+            const params = hasSearch
+                ? {
+                    q: query.search!.trim(),
+                    limit,
+                    offset: (page - 1) * limit,
+                    sortBy: query.sortBy || 'createdAt',
+                    sortOrder: query.sortOrder || 'desc',
+                }
+                : {
+                    sellerId: query.vendorId,
+                    categoryId: query.categoryId,
+                    status: this.toProductServiceStatus(query.status),
+                };
 
             this.logger.log(`Fetching products with params: ${JSON.stringify(params)}`);
 
             const response = await firstValueFrom(
-                this.httpService.get<ProductServiceResponse<any[]>>(`${this.productServiceUrl}/products/search`, {
+                this.httpService.get<ProductServiceResponse<any[]>>(`${this.productServiceUrl}/products${hasSearch ? '/search' : ''}`, {
                     params,
                     timeout: this.timeout,
                     headers: await this.getAuthHeaders(),
@@ -96,14 +100,18 @@ export class ProductService {
             const duration = Date.now() - startTime;
             this.logger.log(`Products fetched successfully in ${duration}ms`);
 
+            const products = Array.isArray(response.data)
+                ? response.data
+                : response.data.data || [];
+
             return {
                 success: true,
                 message: 'Products retrieved successfully',
-                data: response.data.data || [],
+                data: products,
                 meta: response.data.meta || {
-                    page: params.page,
-                    limit: params.limit,
-                    total: Array.isArray(response.data.data) ? response.data.data.length : 0,
+                    page,
+                    limit,
+                    total: products.length,
                     totalPages: 1,
                     hasNext: false,
                     hasPrevious: false,
@@ -112,6 +120,20 @@ export class ProductService {
         } catch (error) {
             this.handleError(error, 'Failed to fetch products');
         }
+    }
+
+    private toProductServiceStatus(status?: ProductStatus): 'active' | 'inactive' | 'draft' | undefined {
+        if (!status) {
+            return undefined;
+        }
+
+        const statusMap: Partial<Record<ProductStatus, 'active' | 'inactive' | 'draft'>> = {
+            [ProductStatus.ACTIVE]: 'active',
+            [ProductStatus.INACTIVE]: 'inactive',
+            [ProductStatus.PENDING]: 'draft',
+        };
+
+        return statusMap[status];
     }
 
     async findOne(id: string): Promise<SingleProductResponseDto> {

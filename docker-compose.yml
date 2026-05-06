@@ -244,6 +244,7 @@ services:
       - JWT_ISSUER=http://localhost:8001
       - JWT_AUDIENCE=${JWT_PLATFORM_AUDIENCE:-emp-platform}
       - JWKS_URL=http://auth-service:8001/api/.well-known/jwks.json
+      - ADMIN_SERVICE_PUBLIC_KEY_PATH=/run/secrets/admin_service_public_key.pem
       
       # OpenTelemetry Configuration
       - OTEL_SERVICE_NAME=product-service
@@ -262,9 +263,11 @@ services:
         condition: service_healthy
     networks:
       - emp-backend
+    volumes:
+      - ./services/admin-service/config/jwt/public.pem:/run/secrets/admin_service_public_key.pem:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8002/health/live', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8002/api/health/live', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -444,6 +447,8 @@ services:
       - REDIS_HOST=redis-master
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - REDIS_SENTINEL_HOSTS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+      - REDIS_SENTINEL_MASTER=mymaster
       
       # RabbitMQ Configuration
       - RABBITMQ_URL=amqp://emp:emp@rabbitmq:5672
@@ -457,6 +462,8 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-http://localhost:8001}
       - JWT_AUDIENCE=${JWT_PLATFORM_AUDIENCE:-emp-platform}
       - JWKS_URL=http://auth-service:8001/api/.well-known/jwks.json
+      - JWT_PRIVATE_KEY_PATH=/app/config/jwt/private.pem
+      - SERVICE_TOKEN_TTL=${SERVICE_TOKEN_TTL:-3600}
       
       # Application Configuration
       - NODE_ENV=${NODE_ENV:-production}
@@ -533,7 +540,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "-c"
       - "listen_addresses=*"
       - "-c"
       - "max_connections=200"
@@ -590,7 +596,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "-c"
       - "listen_addresses=*"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_order"]
@@ -619,7 +624,6 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     command: 
       - "postgres"
-      - "-c"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -650,7 +654,6 @@ services:
     command: 
       - "postgres"
       - "-c"
-      - "-c"
       - "listen_addresses=*"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emp} -d emp_payment"]
@@ -679,7 +682,6 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     command: 
       - "postgres"
-      - "-c"
       - "-c"
       - "listen_addresses=*"
     healthcheck:
@@ -736,7 +738,6 @@ services:
       - -c
       - mongosh --host mongodb:27017 /scripts/init-replica.js
     restart: "no"
-    volumes:
     networks:
       - emp-backend
 
@@ -764,7 +765,9 @@ services:
   # ============================================
   # Redis Replica 1
   # ============================================
+  redis-replica-1:
     image: redis:7.2-alpine
+    container_name: emp-redis-replica-1
     depends_on:
       redis-master:
         condition: service_healthy
@@ -775,7 +778,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -783,7 +785,9 @@ services:
   # ============================================
   # Redis Replica 2
   # ============================================
+  redis-replica-2:
     image: redis:7.2-alpine
+    container_name: emp-redis-replica-2
     depends_on:
       redis-master:
         condition: service_healthy
@@ -794,7 +798,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -822,7 +825,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -850,7 +852,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -878,7 +879,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
-    volumes:
     networks:
       - emp-backend
     restart: unless-stopped
@@ -940,5 +940,9 @@ volumes:
   redis-master-data:
     driver: local
     name: emp-redis-master-data
+  redis-replica-1-data:
     driver: local
+    name: emp-redis-replica-1-data
+  redis-replica-2-data:
     driver: local
+    name: emp-redis-replica-2-data

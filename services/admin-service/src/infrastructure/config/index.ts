@@ -4,6 +4,8 @@ export const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 export const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 export const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
 export const REDIS_DB = parseInt(process.env.REDIS_DB || '0');
+export const REDIS_SENTINEL_HOSTS = process.env.REDIS_SENTINEL_HOSTS || '';
+export const REDIS_SENTINEL_MASTER = process.env.REDIS_SENTINEL_MASTER || '';
 
 export const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://admin:admin_password@localhost:5672/emp.admin';
 export const RABBITMQ_QUEUE_PREFIX = process.env.RABBITMQ_QUEUE_PREFIX || 'admin';
@@ -25,6 +27,8 @@ export default () => ({
     REDIS_PORT,
     REDIS_PASSWORD,
     REDIS_DB,
+    REDIS_SENTINEL_HOSTS,
+    REDIS_SENTINEL_MASTER,
     RABBITMQ_URL,
     RABBITMQ_QUEUE_PREFIX,
     JWT_SECRET,

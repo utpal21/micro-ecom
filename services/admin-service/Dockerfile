@@ -49,6 +49,10 @@ COPY --from=builder /app/prisma ./prisma
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy JWT key material for local Docker service-to-service auth.
+# Production deployments should replace this with a mounted secret.
+COPY --from=builder --chown=nodejs:nodejs /app/config ./config
+
 # Change ownership
 RUN chown -R nodejs:nodejs /app
 

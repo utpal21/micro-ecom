@@ -6,8 +6,9 @@ import {
     Logger,
 } from '@nestjs/common';
 import { ConfigService } from '../../config/config.service';
-import { createRemoteJWKSet, jwtVerify, importJWK } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { verify as jwtVerifyLegacy } from 'jsonwebtoken';
+import { readFileSync } from 'fs';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -21,7 +22,9 @@ export class JwtAuthGuard implements CanActivate {
 
         // Load admin-service public key for service token verification
         // Convert \n to actual newlines for docker-compose compatibility
-        const publicKey = this.configService.adminServicePublicKey;
+        const publicKey =
+            this.configService.adminServicePublicKey ||
+            this.loadAdminServicePublicKeyFromFile();
         this.adminPublicKey = publicKey ? publicKey.replace(/\\n/g, '\n').replace(/\n\n/g, '\n') : null;
 
         if (this.adminPublicKey) {
@@ -92,5 +95,22 @@ export class JwtAuthGuard implements CanActivate {
     private extractTokenFromHeader(request: any): string | undefined {
         const [type, token] = request.headers.authorization?.split(' ') ?? [];
         return type === 'Bearer' ? token : undefined;
+    }
+
+    private loadAdminServicePublicKeyFromFile(): string | null {
+        const keyPath = this.configService.adminServicePublicKeyPath;
+
+        if (!keyPath) {
+            return null;
+        }
+
+        try {
+            const key = readFileSync(keyPath, 'utf8');
+            this.logger.log(`Loaded admin service public key from ${keyPath}`);
+            return key;
+        } catch (error) {
+            this.logger.error(`Failed to load admin service public key from ${keyPath}: ${error.message}`);
+            return null;
+        }
     }
 }

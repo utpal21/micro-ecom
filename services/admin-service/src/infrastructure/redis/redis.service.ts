@@ -1,6 +1,13 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import Redis from 'ioredis';
-import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB } from '../config';
+import Redis, { RedisOptions } from 'ioredis';
+import {
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_PASSWORD,
+    REDIS_DB,
+    REDIS_SENTINEL_HOSTS,
+    REDIS_SENTINEL_MASTER,
+} from '../config';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -9,22 +16,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     async onModuleInit() {
         try {
-            this.client = new Redis({
-                host: REDIS_HOST,
-                port: REDIS_PORT,
-                password: REDIS_PASSWORD || undefined,
-                db: REDIS_DB,
-                retryStrategy: (times) => {
-                    if (times > 3) {
-                        this.logger.error('Redis connection failed after 3 retries');
-                        return null;
-                    }
-                    const delay = Math.min(times * 100, 3000);
-                    this.logger.warn(`Retrying Redis connection in ${delay}ms...`);
-                    return delay;
-                },
-                maxRetriesPerRequest: 3,
-            });
+            this.client = new Redis(this.createRedisOptions());
 
             this.client.on('connect', () => {
                 this.logger.log('Redis connected successfully');
@@ -150,5 +142,46 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     getClient(): Redis {
         return this.client;
+    }
+
+    private createRedisOptions(): RedisOptions {
+        const baseOptions: RedisOptions = {
+            password: REDIS_PASSWORD || undefined,
+            db: REDIS_DB,
+            retryStrategy: (times) => {
+                if (times > 3) {
+                    this.logger.error('Redis connection failed after 3 retries');
+                    return null;
+                }
+                const delay = Math.min(times * 100, 3000);
+                this.logger.warn(`Retrying Redis connection in ${delay}ms...`);
+                return delay;
+            },
+            maxRetriesPerRequest: 3,
+        };
+
+        if (REDIS_SENTINEL_HOSTS && REDIS_SENTINEL_MASTER) {
+            const sentinels = REDIS_SENTINEL_HOSTS.split(',')
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .map((entry) => {
+                    const [host, port = '26379'] = entry.split(':');
+                    return { host, port: Number(port) };
+                });
+
+            this.logger.log(`Using Redis Sentinel master ${REDIS_SENTINEL_MASTER}`);
+            return {
+                ...baseOptions,
+                sentinels,
+                name: REDIS_SENTINEL_MASTER,
+                role: 'master',
+            };
+        }
+
+        return {
+            ...baseOptions,
+            host: REDIS_HOST,
+            port: REDIS_PORT,
+        };
     }
 }

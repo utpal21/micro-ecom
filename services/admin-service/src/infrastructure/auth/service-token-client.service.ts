@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 import { sign, SignOptions } from 'jsonwebtoken';
+import { readFileSync } from 'fs';
 
 @Injectable()
 export class ServiceTokenClient {
@@ -15,11 +16,13 @@ export class ServiceTokenClient {
         private readonly redisService: RedisService,
     ) {
         this.serviceName = this.configService.get<string>('SERVICE_NAME', 'admin-service');
-        this.tokenTTL = this.configService.get<number>('SERVICE_TOKEN_TTL', 3600); // 1 hour default
+        this.tokenTTL = Number(this.configService.get<string | number>('SERVICE_TOKEN_TTL', 3600)); // 1 hour default
 
-        // Load private key from environment
-        // Convert \n to actual newlines for docker-compose compatibility
-        const privateKey = this.configService.get<string>('JWT_PRIVATE_KEY');
+        // Load private key from environment first, then from a mounted secret/file.
+        // Convert \n to actual newlines for docker-compose compatibility.
+        const privateKey =
+            this.configService.get<string>('JWT_PRIVATE_KEY') ||
+            this.loadPrivateKeyFromFile();
 
         // Handle multiple escape sequences
         this.privateKey = privateKey
@@ -28,13 +31,11 @@ export class ServiceTokenClient {
 
         if (!this.privateKey) {
             this.logger.warn(
-                'JWT_PRIVATE_KEY not configured. Service tokens will not work. ' +
-                'Generate RSA key pair and add JWT_PRIVATE_KEY to .env file.'
+                'JWT_PRIVATE_KEY/JWT_PRIVATE_KEY_PATH not configured. Service tokens will not work. ' +
+                'Configure an RSA private key through env or a mounted secret file.'
             );
         } else {
             this.logger.log('Service token client initialized successfully');
-            this.logger.debug(`Private key length: ${this.privateKey.length} chars`);
-            this.logger.debug(`Private key starts with: ${this.privateKey.substring(0, 50)}...`);
         }
     }
 
@@ -46,7 +47,7 @@ export class ServiceTokenClient {
         if (!this.privateKey) {
             throw new Error(
                 'JWT_PRIVATE_KEY not configured. Cannot generate service tokens. ' +
-                'Please configure JWT_PRIVATE_KEY in environment variables.'
+                'Please configure JWT_PRIVATE_KEY or JWT_PRIVATE_KEY_PATH.'
             );
         }
 
@@ -62,6 +63,23 @@ export class ServiceTokenClient {
         // Generate new token
         this.logger.debug(`[getServiceToken] Cache miss, generating new token for ${targetService}`);
         return this.generateAndCacheToken(targetService);
+    }
+
+    private loadPrivateKeyFromFile(): string | null {
+        const keyPath = this.configService.get<string>('JWT_PRIVATE_KEY_PATH');
+
+        if (!keyPath) {
+            return null;
+        }
+
+        try {
+            const key = readFileSync(keyPath, 'utf8');
+            this.logger.log(`Loaded service token private key from ${keyPath}`);
+            return key;
+        } catch (error) {
+            this.logger.error(`Failed to load JWT private key from ${keyPath}: ${error.message}`);
+            return null;
+        }
     }
 
     /**
@@ -82,12 +100,7 @@ export class ServiceTokenClient {
         };
 
         try {
-            // Debug: Log private key details before signing
             this.logger.debug(`Attempting to sign with RS256 algorithm`);
-            this.logger.debug(`Private key type: ${typeof this.privateKey}`);
-            this.logger.debug(`Private key length: ${this.privateKey!.length}`);
-            this.logger.debug(`Private key starts with: ${this.privateKey!.substring(0, 50)}...`);
-            this.logger.debug(`Private key ends with: ...${this.privateKey!.substring(this.privateKey!.length - 30)}`);
 
             // Sign with private key (we've already validated it's not null)
             const token = sign(payload, this.privateKey!, signOptions);
@@ -102,7 +115,6 @@ export class ServiceTokenClient {
             this.logger.error(`Failed to generate service token for ${targetService}`);
             this.logger.error(`Error type: ${error.name}`);
             this.logger.error(`Error message: ${error.message}`);
-            this.logger.error(`Private key in use: ${this.privateKey!.substring(0, 50)}...`);
             throw new Error(`Failed to generate service token: ${error.message}`);
         }
     }
