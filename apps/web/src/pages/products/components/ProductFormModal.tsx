@@ -8,7 +8,8 @@ import { Modal, Form, Input, InputNumber, Select, Upload, message, Image } from 
 import { PlusOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { useCreateProductMutation, useUpdateProductMutation } from '../../../store/api/apiSlice';
-import type { Product } from '../../../types';
+import { useGetCategoriesQuery } from '../../../store/api/categoryApiSlice';
+import type { Product, Category } from '../../../types';
 
 const { TextArea } = Input;
 
@@ -26,6 +27,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
 
     const [createProduct, { isLoading: isCreating }] = useCreateProductMutation();
     const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
+    const { data: categories = [], isLoading: categoriesLoading } = useGetCategoriesQuery();
 
     const isEdit = !!product;
 
@@ -37,10 +39,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
                     sku: product.sku,
                     description: product.description,
                     price: product.price,
-                    currency: product.currency,
                     stock: product.stock,
-                    category: product.category,
-                    status: product.status,
+                    categoryId: product.categoryId,
+                    vendorId: product.vendorId,
+                    status: product.status || 'ACTIVE',
+                    attributes: product.attributes || {},
                 });
                 setPreviewImage(product.images?.[0] || '');
             } else {
@@ -90,8 +93,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
                 layout="vertical"
                 onFinish={handleSubmit}
                 initialValues={{
-                    currency: 'USD',
-                    status: 'draft',
+                    status: 'ACTIVE',
+                    stock: 0,
                 }}
             >
                 <Form.Item
@@ -112,18 +115,32 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
 
                 <Form.Item
                     label="Category"
-                    name="category"
-                    rules={[{ required: true, message: 'Please select category' }]}
+                    name="categoryId"
+                    rules={[]}
                 >
-                    <Select placeholder="Select category">
-                        <Select.Option value="Electronics">Electronics</Select.Option>
-                        <Select.Option value="Clothing">Clothing</Select.Option>
-                        <Select.Option value="Food">Food</Select.Option>
-                        <Select.Option value="Home">Home</Select.Option>
-                        <Select.Option value="Sports">Sports</Select.Option>
-                        <Select.Option value="Books">Books</Select.Option>
-                        <Select.Option value="Other">Other</Select.Option>
+                    <Select
+                        placeholder="Select a category"
+                        loading={categoriesLoading}
+                        allowClear
+                        showSearch
+                        filterOption={(input, option) =>
+                            String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                    >
+                        {categories.map(category => (
+                            <Select.Option key={category._id} value={category._id}>
+                                {category.name}
+                            </Select.Option>
+                        ))}
                     </Select>
+                </Form.Item>
+
+                <Form.Item
+                    label="Vendor ID"
+                    name="vendorId"
+                    rules={[]}
+                >
+                    <Input placeholder="Enter vendor ID (UUID)" />
                 </Form.Item>
 
                 <Form.Item
@@ -134,34 +151,18 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
                     <TextArea rows={4} placeholder="Enter product description" />
                 </Form.Item>
 
-                <div style={{ display: 'flex', gap: 16 }}>
-                    <Form.Item
-                        label="Price"
-                        name="price"
-                        rules={[{ required: true, message: 'Please enter price' }]}
-                        style={{ flex: 1 }}
-                    >
-                        <InputNumber
-                            style={{ width: '100%' }}
-                            min={0}
-                            step={0.01}
-                            placeholder="0.00"
-                        />
-                    </Form.Item>
-
-                    <Form.Item
-                        label="Currency"
-                        name="currency"
-                        style={{ flex: 1 }}
-                    >
-                        <Select>
-                            <Select.Option value="USD">USD ($)</Select.Option>
-                            <Select.Option value="EUR">EUR (€)</Select.Option>
-                            <Select.Option value="GBP">GBP (£)</Select.Option>
-                            <Select.Option value="BDT">BDT (৳)</Select.Option>
-                        </Select>
-                    </Form.Item>
-                </div>
+                <Form.Item
+                    label="Price (in paisa)"
+                    name="price"
+                    rules={[{ required: true, message: 'Please enter price' }]}
+                >
+                    <InputNumber
+                        style={{ width: '100%' }}
+                        min={0}
+                        step={1}
+                        placeholder="250000"
+                    />
+                </Form.Item>
 
                 <Form.Item
                     label="Stock"
@@ -181,9 +182,10 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ open, product, onCa
                     rules={[{ required: true, message: 'Please select status' }]}
                 >
                     <Select>
-                        <Select.Option value="draft">Draft</Select.Option>
-                        <Select.Option value="active">Active</Select.Option>
-                        <Select.Option value="inactive">Inactive</Select.Option>
+                        <Select.Option value="PENDING">Pending</Select.Option>
+                        <Select.Option value="ACTIVE">Active</Select.Option>
+                        <Select.Option value="INACTIVE">Inactive</Select.Option>
+                        <Select.Option value="REJECTED">Rejected</Select.Option>
                     </Select>
                 </Form.Item>
 

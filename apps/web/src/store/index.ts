@@ -8,6 +8,7 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { persistStore, persistReducer } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { apiSlice } from './api/apiSlice';
+import { categoryApiSlice } from './api/categoryApiSlice';
 import authReducer from './slices/authSlice';
 import uiReducer from './slices/uiSlice';
 import notificationReducer from './slices/notificationSlice';
@@ -30,6 +31,7 @@ const authPersistConfig = {
 export const store = configureStore({
     reducer: {
         [apiSlice.reducerPath]: apiSlice.reducer,
+        [categoryApiSlice.reducerPath]: categoryApiSlice.reducer,
         auth: persistReducer(authPersistConfig, authReducer) as any,
         ui: uiReducer,
         notifications: notificationReducer,
@@ -42,11 +44,11 @@ export const store = configureStore({
                 // Ignore these field paths in all actions
                 ignoredActionPaths: ['meta.arg', 'payload.timestamp'],
                 // Ignore these paths in the state
-                ignoredPaths: ['api'],
+                ignoredPaths: ['api', 'categoryApi'],
             },
         });
 
-        return middleware.concat(apiSlice.middleware);
+        return middleware.concat(apiSlice.middleware, categoryApiSlice.middleware);
     },
     devTools: process.env.NODE_ENV !== 'production',
 });

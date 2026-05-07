@@ -48,19 +48,39 @@ export interface Vendor {
     updatedAt: string
 }
 
+// Category Types
+export interface Category {
+    _id: string
+    name: string
+    description: string
+    parentId?: string | null
+    slug?: string
+    status: 'active' | 'inactive' | 'archived'
+    sortOrder: number
+    metaTitle?: string
+    metaDescription?: string
+    metaKeywords?: string[]
+    image?: string
+    featured: boolean
+    showInMenu: boolean
+    content?: string
+    createdAt: string
+    updatedAt: string
+}
+
 // Product Types
 export interface Product {
     id: string
     vendorId: string
+    categoryId?: string
     name: string
     description: string
-    sku: string
+    sku?: string
     price: number
-    currency: string
-    stock: number
-    category: string
-    images: string[]
-    status: 'draft' | 'active' | 'inactive' | 'deleted'
+    stock?: number
+    images?: string[]
+    status?: 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'REJECTED'
+    attributes?: Record<string, any>
     createdAt: string
     updatedAt: string
 }

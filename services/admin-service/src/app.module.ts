@@ -18,6 +18,7 @@ import { OrderModule } from './modules/order/order.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { CategoryModule } from './modules/categories/category.module';
 import { ServiceAuthModule } from './infrastructure/auth/auth.module';
 
 @Module({
@@ -51,6 +52,7 @@ import { ServiceAuthModule } from './infrastructure/auth/auth.module';
     CustomerModule,
     InventoryModule,
     DashboardModule,
+    CategoryModule,
     HealthModule,
   ],
   controllers: [],

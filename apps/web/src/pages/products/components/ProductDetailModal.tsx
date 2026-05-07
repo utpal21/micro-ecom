@@ -21,10 +21,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ open, product, 
 
     const getStatusTag = (status: string) => {
         const statusConfig: Record<string, { color: string; text: string }> = {
-            draft: { color: 'default', text: 'Draft' },
-            active: { color: 'green', text: 'Active' },
-            inactive: { color: 'red', text: 'Inactive' },
-            deleted: { color: 'volcano', text: 'Deleted' },
+            PENDING: { color: 'default', text: 'Pending' },
+            ACTIVE: { color: 'green', text: 'Active' },
+            INACTIVE: { color: 'red', text: 'Inactive' },
+            REJECTED: { color: 'volcano', text: 'Rejected' },
         };
         const config = statusConfig[status] || { color: 'default', text: status };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -64,10 +64,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ open, product, 
                     <Descriptions.Item label="Product ID" span={2}>
                         {product.id}
                     </Descriptions.Item>
-                    <Descriptions.Item label="SKU">{product.sku}</Descriptions.Item>
-                    <Descriptions.Item label="Category">{product.category}</Descriptions.Item>
-                    <Descriptions.Item label="Price" span={2}>
-                        {product.currency} {product.price.toFixed(2)}
+                    <Descriptions.Item label="SKU">{product.sku || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="Category ID">{product.categoryId || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="Vendor ID" span={2}>{product.vendorId || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="Price (paisa)" span={2}>
+                        {product.price.toLocaleString()}
                     </Descriptions.Item>
                     <Descriptions.Item label="Stock">
                         <Tag color={product.stock > 10 ? 'green' : product.stock > 0 ? 'orange' : 'red'}>

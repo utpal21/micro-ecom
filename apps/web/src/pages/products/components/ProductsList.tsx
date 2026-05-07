@@ -64,10 +64,10 @@ const ProductsList: React.FC<ProductsListProps> = ({ onEdit, onView, onDelete })
 
     const getStatusTag = (status: string) => {
         const statusConfig: Record<string, { color: string; text: string }> = {
-            draft: { color: 'default', text: 'Draft' },
-            active: { color: 'green', text: 'Active' },
-            inactive: { color: 'red', text: 'Inactive' },
-            deleted: { color: 'volcano', text: 'Deleted' },
+            PENDING: { color: 'default', text: 'Pending' },
+            ACTIVE: { color: 'green', text: 'Active' },
+            INACTIVE: { color: 'red', text: 'Inactive' },
+            REJECTED: { color: 'volcano', text: 'Rejected' },
         };
         const config = statusConfig[status] || { color: 'default', text: status };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -87,25 +87,22 @@ const ProductsList: React.FC<ProductsListProps> = ({ onEdit, onView, onDelete })
             ),
         },
         {
-            title: 'Category',
-            dataIndex: 'category',
-            key: 'category',
-            filters: [
-                { text: 'Electronics', value: 'Electronics' },
-                { text: 'Clothing', value: 'Clothing' },
-                { text: 'Food', value: 'Food' },
-                { text: 'Other', value: 'Other' },
-            ],
+            title: 'Category ID',
+            dataIndex: 'categoryId',
+            key: 'categoryId',
+            render: (categoryId: string) => (
+                <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                    {categoryId || 'N/A'}
+                </span>
+            ),
         },
         {
-            title: 'Price',
+            title: 'Price (paisa)',
             dataIndex: 'price',
             key: 'price',
             sorter: true,
-            render: (price: number, record: Product) => (
-                <span>
-                    {record.currency} {price.toFixed(2)}
-                </span>
+            render: (price: number) => (
+                <span>{price.toLocaleString()}</span>
             ),
         },
         {
@@ -124,10 +121,10 @@ const ProductsList: React.FC<ProductsListProps> = ({ onEdit, onView, onDelete })
             dataIndex: 'status',
             key: 'status',
             filters: [
-                { text: 'Draft', value: 'draft' },
-                { text: 'Active', value: 'active' },
-                { text: 'Inactive', value: 'inactive' },
-                { text: 'Deleted', value: 'deleted' },
+                { text: 'Pending', value: 'PENDING' },
+                { text: 'Active', value: 'ACTIVE' },
+                { text: 'Inactive', value: 'INACTIVE' },
+                { text: 'Rejected', value: 'REJECTED' },
             ],
             render: getStatusTag,
         },

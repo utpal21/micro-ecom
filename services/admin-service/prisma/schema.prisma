@@ -218,6 +218,39 @@ model VendorSettlement {
   @@index([processedBy])
 }
 
+// Product categories
+model Category {
+  id                String    @id @default(uuid())
+  name              String
+  description       String?   @db.Text
+  slug              String    @unique
+  parentId          String?   @map("parent_id")
+  status            String    @default("ACTIVE")
+  isFeatured        Boolean   @default(false) @map("is_featured")
+  showInMenu        Boolean   @default(true) @map("show_in_menu")
+  sortOrder         Int       @default(0) @map("sort_order")
+  metaTitle         String?   @map("meta_title")
+  metaKeywords      String?   @map("meta_keywords")
+  metaDescription   String?   @map("meta_description")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Self-referencing relation for parent/child categories
+  parent            Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children          Category[] @relation("CategoryHierarchy")
+
+  @@map("categories")
+  @@index([status])
+  @@index([parentId])
+  @@index([slug])
+  @@index([isFeatured])
+  @@index([showInMenu])
+  @@index([sortOrder])
+  @@index([createdAt])
+}
+
 // System configurations
 model Configuration {
   key          String   @id

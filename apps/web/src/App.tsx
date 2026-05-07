@@ -14,6 +14,7 @@ import { MainLayout } from './components/layout';
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProductsPage from './pages/products/ProductsPage';
+import CategoriesPage from './pages/categories/CategoriesPage';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -63,6 +64,7 @@ function App() {
                   <Route path="dashboard" element={<DashboardPage />} />
                   <Route path="vendors" element={<VendorsPage />} />
                   <Route path="products" element={<ProductsPage />} />
+                  <Route path="categories" element={<CategoriesPage />} />
                   <Route path="orders" element={<OrdersPage />} />
                   <Route path="users" element={<UsersPage />} />
                   <Route path="settings" element={<SettingsPage />} />

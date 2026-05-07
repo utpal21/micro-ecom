@@ -10,6 +10,7 @@ import {
     ShoppingCartOutlined,
     UserOutlined,
     PictureOutlined,
+    FolderOutlined,
     SettingOutlined,
     LogoutOutlined,
     MenuFoldOutlined,
@@ -59,6 +60,12 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
             icon: <PictureOutlined />,
             label: 'Products',
             onClick: () => navigate('/products'),
+        },
+        {
+            key: '/categories',
+            icon: <FolderOutlined />,
+            label: 'Categories',
+            onClick: () => navigate('/categories'),
         },
         {
             key: '/orders',

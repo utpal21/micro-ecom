@@ -16,6 +16,7 @@ import type {
     RevenueData,
     TopProduct,
     TableParams,
+    Category,
 } from '../../types';
 
 // ============================================================================
